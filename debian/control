@@ -10,9 +10,12 @@ Architecture: all
 Homepage: http://sourceforge.net/projects/clustershell/
 XB-Python-Version: ${python:Versions}
 Depends: ${misc:Depends}, ${python:Depends}
-Description: An event-based python library to execute commands  on local or
- distant cluster nodes in parallel depending on the selected engine and
+Description : Distributed shell that provides an efficient python interface
+ Event-based Python library to execute commands on local or distant
+ cluster nodes in parallel depending on the selected engine and
  worker mechanisms.
  .
- Example : clush -w node[001-256] hostname 
- or clush -w node[001-256] apt-get update|clubak -c
+ The library provides also advanced nodeset handling methods. Its goal
+ is to improve the administration of cluster by providing a lightweight
+ but scalable API for developers.
+
