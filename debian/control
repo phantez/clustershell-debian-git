@@ -1,0 +1,18 @@
+Source: clustershell
+Section: net
+Priority: optional
+Maintainer: Stéphan Gorget <phantez@gmail.com>
+Build-Depends: debhelper (>=7.0.0), python-support (>= 0.6), cdbs (>= 0.4.49), python-all
+Standards-Version: 3.8.4
+
+Package: clustershell
+Architecture: all
+Homepage: http://sourceforge.net/projects/clustershell/
+XB-Python-Version: ${python:Versions}
+Depends: ${misc:Depends}, ${python:Depends}
+Description: An event-based python library to execute commands  on local or
+ distant cluster nodes in parallel depending on the selected engine and
+ worker mechanisms.
+ .
+ Example : clush -w node[001-256] hostname 
+ or clush -w node[001-256] apt-get update|clubak -c
