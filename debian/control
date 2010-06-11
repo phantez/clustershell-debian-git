@@ -1,14 +1,17 @@
 Source: clustershell
 Section: net
 Priority: optional
-Maintainer: Stéphan Gorget <phantez@gmail.com>
+Maintainer: Python Applications Packaging Team <python-apps-team@lists.alioth.debian.org>
+Uploaders: Stéphan Gorget <phantez@gmail.com>
+Homepage: http://sourceforge.net/projects/clustershell/
 Build-Depends: debhelper (>=7.0.0), python-support (>= 0.6), cdbs (>= 0.4.49), python-all
+XS-Python-Version: >= 2.5
 Standards-Version: 3.8.4
+Vcs-Svn: svn://svn.debian.org/python-apps/packages/clustershell/trunk/
+Vcs-Browser: http://svn.debian.org/viewsvn/python-apps/packages/clustershell/trunk/
 
 Package: clustershell
 Architecture: all
-Homepage: http://sourceforge.net/projects/clustershell/
-XB-Python-Version: ${python:Versions}
 Depends: ${misc:Depends}, ${python:Depends}
 Description : Distributed shell that provides an efficient python interface
  Event-based Python library to execute commands on local or distant
