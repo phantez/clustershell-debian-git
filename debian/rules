@@ -7,5 +7,5 @@ include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/python-distutils.mk
 
 clean::
-	rm -rf build scripts/nodeset scripts/clush scripts/clubak python-build-stamp-2.5
+	rm -rf build scripts/nodeset scripts/clush scripts/clubak 
 	dh_clean
