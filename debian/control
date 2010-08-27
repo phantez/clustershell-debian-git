@@ -6,7 +6,7 @@ Uploaders: Stéphan Gorget <phantez@gmail.com>
 Homepage: http://sourceforge.net/projects/clustershell/
 Build-Depends: debhelper (>= 7~), python-support (>= 0.6), cdbs (>= 0.4.49), python-all
 XS-Python-Version: >= 2.4
-Standards-Version: 3.8.4
+Standards-Version: 3.9.1
 Vcs-Svn: svn://svn.debian.org/python-apps/packages/clustershell/trunk/
 Vcs-Browser: http://svn.debian.org/viewsvn/python-apps/packages/clustershell/trunk/
 
