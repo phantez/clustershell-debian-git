@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Python Applications Packaging Team <python-apps-team@lists.alioth.debian.org>
 Uploaders: Stéphan Gorget <phantez@gmail.com>
 Homepage: http://sourceforge.net/projects/clustershell/
-Build-Depends: debhelper (>= 7~), python-support, python
+Build-Depends: debhelper (>= 7~), python-support, python-all
 XS-Python-Version: >= 2.4
 Standards-Version: 3.9.1
 Vcs-Svn: svn://svn.debian.org/python-apps/packages/clustershell/trunk/
@@ -21,12 +21,4 @@ Description: Distributed shell that provides an efficient python interface
  The library provides also advanced nodeset handling methods. Its goal
  is to improve the administration of cluster by providing a lightweight
  but scalable API for developers.
-
-Package: vim-clustershell
-Architecture: all
-Depends: ${misc:Depends}
-Recommends: vim-addon-manager
-Description: syntax highlighting for clustershell configuration files in vim
- The vim-clustershell package provides filetype detection and syntax
- highlighting for configuration files.
 
