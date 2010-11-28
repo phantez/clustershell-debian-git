@@ -31,7 +31,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: nodeset.py 280 2010-06-16 21:15:41Z st-cea $
+# $Id: nodeset.py 322 2010-08-29 20:44:30Z st-cea $
 
 """
 Usage: nodeset [COMMAND] [OPTIONS] [ns1 [-ixX] ns2|...]

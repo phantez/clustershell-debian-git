@@ -1,1 +1,4 @@
 /etc/clustershell
+usr/share/vim/addons/syntax
+usr/share/vim/addons/ftdetect
+usr/share/vim/registry

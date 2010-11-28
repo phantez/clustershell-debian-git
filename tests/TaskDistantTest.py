@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell (distant) test suite
 # Written by S. Thiell 2009-02-13
-# $Id: TaskDistantTest.py 289 2010-07-12 21:30:00Z st-cea $
+# $Id: TaskDistantTest.py 322 2010-08-29 20:44:30Z st-cea $
 
 
 """Unit test for ClusterShell Task (distant)"""

@@ -30,23 +30,25 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: __init__.py 304 2010-07-27 19:47:09Z st-cea $
+# $Id: __init__.py 390 2010-10-20 21:07:44Z st-cea $
 
 
 """ClusterShell Python Library
 
-ClusterShell is a python event-based python library to execute commands
-on local or distant cluster nodes in parallel depending on the selected
-engine and worker mechanisms.
+Event-based Python library to execute commands on local or distant
+cluster nodes in parallel depending on the selected engine and worker
+mechanisms. It also provides advanced NodeSet and NodeGroups handling
+methods to ease and improve administration of large compute clusters
+or server farms.
 
 Please see first:
   - ClusterShell.NodeSet
   - ClusterShell.Task
 """
 
-__version__ = '1.3'
+__version__ = '1.3.3'
 __version_info__ = tuple([ int(_n) for _n in __version__.split('.')])
-__date__    = '2010/07/27'
+__date__    = '2010/09/20'
 __author__  = 'Stephane Thiell <stephane.thiell@cea.fr>'
 __url__     = 'http://clustershell.sourceforge.net/'
 
