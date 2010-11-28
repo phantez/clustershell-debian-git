@@ -1,11 +1,12 @@
 #!/usr/bin/make -f
-# -*- makefile -*-
 
-DEB_PYTHON_SYSTEM := pysupport
+%:
+	dh $@
 
-include /usr/share/cdbs/1/rules/debhelper.mk
-include /usr/share/cdbs/1/class/python-distutils.mk
+get-orig-tarball:
+	uscan --verbose --force-download
 
-clean::
-	rm -rf build scripts/nodeset scripts/clush scripts/clubak 
-	dh_clean
+clean:
+	dh $@
+	rm -rf scripts/nodeset scripts/clush scripts/clubak 
+

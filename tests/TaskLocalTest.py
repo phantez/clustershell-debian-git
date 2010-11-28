@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell (local) test suite
 # Written by S. Thiell 2008-04-09
-# $Id: TaskLocalTest.py 296 2010-07-21 19:56:34Z st-cea $
+# $Id: TaskLocalTest.py 322 2010-08-29 20:44:30Z st-cea $
 
 
 """Unit test for ClusterShell Task (local)"""

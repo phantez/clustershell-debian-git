@@ -30,7 +30,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Popen.py 292 2010-07-15 22:43:46Z st-cea $
+# $Id: Popen.py 385 2010-10-19 21:36:48Z st-cea $
 
 """
 WorkerPopen
@@ -123,6 +123,8 @@ class WorkerPopen(WorkerSimple):
 
         self.popen.stdin.close()
         self.popen.stdout.close()
+        if self.popen.stderr:
+            self.popen.stderr.close()
 
         if rc >= 0:
             self._on_rc(rc)
