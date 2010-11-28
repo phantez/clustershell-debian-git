@@ -22,3 +22,11 @@ Description: Distributed shell that provides an efficient python interface
  is to improve the administration of cluster by providing a lightweight
  but scalable API for developers.
 
+Package: vim-clustershell
+Architecture: all
+Depends: ${misc:Depends}
+Recommends: vim-addon-manager
+Description: syntax highlighting for clustershell configuration files in vim
+ The vim-clustershell package provides filetype detection and syntax
+ highlighting for configuration files.
+
