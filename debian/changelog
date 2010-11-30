@@ -1,7 +1,10 @@
 clustershell (1.3.3-1) unstable; urgency=low
 
-  * Change from CDBS to dh_python
-  * Add vim files
+  * Modify rules to change from CDBS to dh
+  * Modify control recommends vim-addon-manager
+  * Add README.Debian to explain how to integrate vim files with vim-addon-manager
+  * Add clustershell.yaml for vim-addon-manager
+  * Modify install and dirs to install yaml and .vim files
   * New upstream release 1.3.3
 
  -- Stéphan Gorget <phantez@gmail.com>  Sun, 28 Nov 2010 01:50:29 +0100
