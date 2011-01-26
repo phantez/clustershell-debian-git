@@ -1,5 +1,6 @@
+#!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010)
+# Copyright CEA/DAM/DIF (2010)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -30,25 +31,40 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: __init__.py 434 2011-01-15 22:16:13Z st-cea $
+# $Id: Utils.py 375 2010-09-28 23:19:15Z st-cea $
 
-
-"""ClusterShell Python Library
-
-Event-based Python library to execute commands on local or distant
-cluster nodes in parallel depending on the selected engine and worker
-mechanisms. It also provides advanced NodeSet and NodeGroups handling
-methods to ease and improve administration of large compute clusters
-or server farms.
-
-Please see first:
-  - ClusterShell.NodeSet
-  - ClusterShell.Task
+"""
+CLI utility functions
 """
 
-__version__ = '1.4'
-__version_info__ = tuple([ int(_n) for _n in __version__.split('.')])
-__date__    = '2011/01/15'
-__author__  = 'Stephane Thiell <stephane.thiell@cea.fr>'
-__url__     = 'http://clustershell.sourceforge.net/'
+import sys
+
+# CLI modules might safely import the NodeSet class from here.
+from ClusterShell.NodeUtils import GroupResolverConfigError
+try:
+    from ClusterShell.NodeSet import NodeSet
+except GroupResolverConfigError, e:
+    print >> sys.stderr, \
+        "ERROR: ClusterShell Groups configuration error:\n\t%s" % e
+    sys.exit(1)
+
+
+def nodeset_cmp(ns1, ns2):
+    """Compare 2 nodesets by their length (we want larger nodeset
+    first) and then by first node."""
+    len_cmp = cmp(len(ns2), len(ns1))
+    if not len_cmp:
+        smaller = NodeSet.fromlist([ns1[0], ns2[0]])[0]
+        if smaller == ns1[0]:
+            return -1
+        else:
+            return 1
+    return len_cmp
+
+def bufnodeset_cmp(bn1, bn2):
+    """Convenience function to compare 2 (buf, nodeset) tuples by their
+    nodeset length (we want larger nodeset first) and then by first
+    node."""
+    # Extract nodesets and call nodeset_cmp
+    return nodeset_cmp(bn1[1], bn2[1])
 

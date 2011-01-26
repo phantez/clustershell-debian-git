@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell.NodeSet test suite
 # Written by S. Thiell 2007-12-05
-# $Id: NodeSetTest.py 297 2010-07-21 20:57:35Z st-cea $
+# $Id: NodeSetTest.py 423 2010-12-09 00:31:21Z st-cea $
 
 
 """Unit test for NodeSet"""
@@ -535,6 +535,28 @@ class NodeSetTest(unittest.TestCase):
         self.assertEqual(nodeset[18], "yeti51")
         self.assertEqual(nodeset[19], "yeti59")
         self.assertEqual(nodeset[20], "yeti60")
+        self.assertRaises(IndexError, nodeset.__getitem__, 21)
+        # test getitem with some nodes without range
+        nodeset = NodeSet("abc,cde[3-9,11],fgh")
+        self.assertEqual(len(nodeset), 10)
+        self.assertEqual(nodeset[0], "abc")
+        self.assertEqual(nodeset[1], "cde3")
+        self.assertEqual(nodeset[2], "cde4")
+        self.assertEqual(nodeset[3], "cde5")
+        self.assertEqual(nodeset[7], "cde9")
+        self.assertEqual(nodeset[8], "cde11")
+        self.assertEqual(nodeset[9], "fgh")
+        self.assertRaises(IndexError, nodeset.__getitem__, 10)
+        # test getitem with rangeset padding
+        nodeset = NodeSet("prune[003-034,349-353/2]")
+        self.assertEqual(len(nodeset), 35)
+        self.assertEqual(nodeset[0], "prune003")
+        self.assertEqual(nodeset[1], "prune004")
+        self.assertEqual(nodeset[31], "prune034")
+        self.assertEqual(nodeset[32], "prune349")
+        self.assertEqual(nodeset[33], "prune351")
+        self.assertEqual(nodeset[34], "prune353")
+        self.assertRaises(IndexError, nodeset.__getitem__, 35)
 
     def testGetSlice(self):
         """test NodeSet getslice()"""
@@ -550,22 +572,80 @@ class NodeSetTest(unittest.TestCase):
         self.assertEqual(str(nodeset[20:22]), "yeti60")
         self.assertEqual(len(nodeset[21:24]), 0)
         self.assertEqual(str(nodeset[21:24]), "")
+        # advanced
+        self.assertEqual(str(nodeset[0:10:2]), "yeti[30,35,37,39,41]")
+        self.assertEqual(str(nodeset[1:11:2]), "yeti[34,36,38,40,42]")
+        self.assertEqual(str(nodeset[:11:3]), "yeti[30,36,39,42]")
+        self.assertEqual(str(nodeset[11::4]), "yeti[44,48,59]")
+        self.assertEqual(str(nodeset[14:]), "yeti[47-51,59-60]")
+        self.assertEqual(str(nodeset[:]), "yeti[30,34-51,59-60]")
+        self.assertEqual(str(nodeset[::5]), "yeti[30,38,43,48,60]")
+        # with unindexed nodes
+        nodeset = NodeSet("foo,bar,bur")
+        self.assertEqual(len(nodeset), 3)
+        self.assertEqual(len(nodeset[0:2]), 2)
+        self.assertEqual(str(nodeset[0:2]), "bar,bur")
+        self.assertEqual(str(nodeset[1:2]), "bur")
+        self.assertEqual(str(nodeset[1:3]), "bur,foo")
+        self.assertEqual(str(nodeset[2:4]), "foo")
+        nodeset = NodeSet("foo,bar,bur3,bur1")
+        self.assertEqual(len(nodeset), 4)
+        self.assertEqual(len(nodeset[0:2]), 2)
+        self.assertEqual(len(nodeset[1:3]), 2)
+        self.assertEqual(len(nodeset[2:4]), 2)
+        self.assertEqual(len(nodeset[3:5]), 1)
+        self.assertEqual(str(nodeset[2:3]), "bur3")
+        self.assertEqual(str(nodeset[3:4]), "foo")
+        self.assertEqual(str(nodeset[0:2]), "bar,bur1")
+        self.assertEqual(str(nodeset[1:3]), "bur[1,3]")
+        # using range step
+        nodeset = NodeSet("yeti[10-98/2]")
+        self.assertEqual(str(nodeset[1:9:3]), "yeti[12,18,24]")
+        self.assertEqual(str(nodeset[::17]), "yeti[10,44,78]")
+        nodeset = NodeSet("yeti[10-98/2]", autostep=2)
+        self.assertEqual(str(nodeset[22:29]), "yeti[54-66/2]")
+        nodeset = NodeSet("yeti[10-98000000/2]", autostep=2)
+        # have to scale
+        self.assertEqual(str(nodeset[22:2900000]), "yeti[54-5800008/2]")
+        self.assertEqual(str(nodeset[22:2900000:3]), "yeti[54-5800008/6]")
+        nodeset = NodeSet("yeti[10-14,20-26,30-33]")
+        self.assertEqual(str(nodeset[2:6]), "yeti[12-14,20]")
+        # multiple patterns
+        nodeset = NodeSet("stone[1-9],wood[1-9]")
+        self.assertEqual(str(nodeset[:]), "stone[1-9],wood[1-9]")
+        self.assertEqual(str(nodeset[1:2]), "stone2")
+        self.assertEqual(str(nodeset[8:9]), "stone9")
+        self.assertEqual(str(nodeset[8:10]), "stone9,wood1")
+        self.assertEqual(str(nodeset[9:10]), "wood1")
+        self.assertEqual(str(nodeset[9:]), "wood[1-9]")
+        nodeset = NodeSet("stone[1-9],water[10-12],wood[1-9]")
+        self.assertEqual(str(nodeset[8:10]), "stone9,water10")
+        self.assertEqual(str(nodeset[11:15]), "water12,wood[1-3]")
+        nodeset = NodeSet("stone[1-9],water,wood[1-9]")
+        self.assertEqual(str(nodeset[8:10]), "stone9,water")
+        self.assertEqual(str(nodeset[8:11]), "stone9,water,wood1")
+        self.assertEqual(str(nodeset[9:11]), "water,wood1")
+        self.assertEqual(str(nodeset[9:12]), "water,wood[1-2]")
 
     def testSplit(self):
         """test NodeSet split()"""
-
         # Empty nodeset
         nodeset = NodeSet()
-        self.assertEqual((NodeSet(), NodeSet()), tuple(nodeset.split(2)))
-
+        self.assertEqual((), tuple(nodeset.split(2)))
         # Not enough element
         nodeset = NodeSet("foo[1]")
-        self.assertEqual((NodeSet("foo[1]"), NodeSet()), tuple(nodeset.split(2)))
-
+        self.assertEqual((NodeSet("foo[1]"),), \
+                         tuple(nodeset.split(2)))
         # Exact number of elements
         nodeset = NodeSet("foo[1-6]")
-        self.assertEqual((NodeSet("foo[1-2]"), NodeSet("foo[3-4]"), NodeSet("foo[5-6]")), tuple(nodeset.split(3)))
-
+        self.assertEqual((NodeSet("foo[1-2]"), NodeSet("foo[3-4]"), \
+                         NodeSet("foo[5-6]")), tuple(nodeset.split(3)))
+        # Check limit results
+        nodeset = NodeSet("bar[2-4]")
+        for i in (3, 4):
+            self.assertEqual((NodeSet("bar2"), NodeSet("bar3"), \
+                             NodeSet("bar4")), tuple(nodeset.split(i)))
+        
     def testAdd(self):
         """test NodeSet add()"""
         nodeset = NodeSet()
@@ -588,6 +668,25 @@ class NodeSetTest(unittest.TestCase):
         self.assert_("green5" in nodeset)
         self.assert_("black64" in nodeset)
         self.assert_("orange046" in nodeset)
+
+    def testAddAdjust(self):
+        """test NodeSet adjusting add()"""
+        # autostep OFF
+        nodeset = NodeSet()
+        nodeset.add("green[1-8/2]")
+        self.assertEqual(str(nodeset), "green[1,3,5,7]")
+        self.assertEqual(len(nodeset), 4)
+        nodeset.add("green[6-17/2]")
+        self.assertEqual(str(nodeset), "green[1,3,5-8,10,12,14,16]")
+        self.assertEqual(len(nodeset), 10)
+        # autostep ON
+        nodeset = NodeSet(autostep=2)
+        nodeset.add("green[1-8/2]")
+        self.assertEqual(str(nodeset), "green[1-7/2]")
+        self.assertEqual(len(nodeset), 4)
+        nodeset.add("green[6-17/2]")
+        self.assertEqual(str(nodeset), "green[1-5/2,6-8,10-16/2]")
+        self.assertEqual(len(nodeset), 10)
 
     def testRemove(self):
         """test NodeSet remove()"""
@@ -667,6 +766,12 @@ class NodeSetTest(unittest.TestCase):
         self.assert_("dark3002" not in nodeset)
         for node in nodeset:
             self.assert_(node in nodeset)
+        nodeset = NodeSet("scale[0-1000000]")
+        self.assert_("black64" not in nodeset)
+        self.assert_("scale93406" in nodeset)
+        nodeset = NodeSet("scale[0-1000000]", autostep=2)
+        self.assert_("scale93406" in nodeset[::2])
+        self.assert_("scale93407" not in nodeset[::2])
 
     def testContainsUsingPadding(self):
         """test NodeSet contains() when using padding"""
@@ -949,7 +1054,6 @@ class NodeSetTest(unittest.TestCase):
         n = NodeSet(None)
         n.clear()
         self.assertEqual(len(n), 0)
-
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 
 " Vim syntax file for clush.conf
-" Version Info: $Id: clushconf.vim 276 2010-06-15 23:15:52Z st-cea $
+" Version Info: $Id: clushconf.vim 428 2010-12-14 22:19:46Z st-cea $
 
 " For version 5.x: Clear all syntax items
 " For version 6.x: Quit when a syntax file was already loaded
@@ -17,7 +17,7 @@ syn match  clushComment	    "#.*$"
 syn match  clushComment	    ";.*$"
 syn match  clushHeader	    "\[\w\+\]"
 
-syn keyword clushKeys       fanout command_timeout connect_timeout history_size color verbosity ssh_user ssh_path ssh_options
+syn keyword clushKeys       fanout command_timeout connect_timeout history_size color node_count verbosity ssh_user ssh_path ssh_options
 
 " Define the default highlighting.
 " For version 5.7 and earlier: only when not done already
