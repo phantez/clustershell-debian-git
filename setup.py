@@ -31,7 +31,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: setup.py 390 2010-10-20 21:07:44Z st-cea $
+# $Id: setup.py 434 2011-01-15 22:16:13Z st-cea $
 
 from setuptools import setup, find_packages
 import os
@@ -44,7 +44,7 @@ if not os.access('scripts/nodeset', os.F_OK):
     os.symlink('nodeset.py', 'scripts/nodeset')
 
 setup(name='ClusterShell',
-      version='1.3.3',
+      version='1.4',
       license='CeCILL-C (French equivalent to LGPLv2+)',
       description='ClusterShell library',
       author='Stephane Thiell',

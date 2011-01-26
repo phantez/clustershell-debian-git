@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell.NodeSet.RangeSet test suite
 # Written by S. Thiell
-# $Id: RangeSetTest.py 221 2010-02-16 20:53:32Z st-cea $
+# $Id: RangeSetTest.py 422 2010-12-08 23:00:18Z st-cea $
 
 
 """Unit test for RangeSet"""
@@ -301,28 +301,94 @@ class RangeSetTest(unittest.TestCase):
         self.assertEqual(r2[31], 102)
         self.assertEqual(r2[32], 104)
         self.assertEqual(r2[33], 106)
+        #self.assertRaises(TypeError, r2['foo'])
 
     def testGetSlice(self):
         """test RangeSet __getslice__()"""
+        r0 = RangeSet("1-12")
+        self.assertEqual(r0[0:3], RangeSet("1-3"))
+        self.assertEqual(r0[2:7], RangeSet("3-7"))
+
+        r1 = RangeSet("10-14,16-20")
+        self.assertEqual(r1[2:6], RangeSet("12-14,16"))
+        self.assertEqual(r1[2:7], RangeSet("12-14,16-17"))
+
         r1 = RangeSet("1-2,4,9,10-12")
         self.assertEqual(r1[0:3], RangeSet("1-2,4"))
+        self.assertEqual(r1[0:4], RangeSet("1-2,4,9"))
         self.assertEqual(r1[2:6], RangeSet("4,9,10-11"))
         self.assertEqual(r1[2:4], RangeSet("4,9"))
+        self.assertEqual(r1[5:6], RangeSet("11"))
+        self.assertEqual(r1[6:7], RangeSet("12"))
+        self.assertEqual(r1[4:7], RangeSet("10-12"))
+
+        # Slice indices are silently truncated to fall in the allowed range
+        self.assertEqual(r1[2:100], RangeSet("4,9-12"))
+        self.assertEqual(r1[9:10], RangeSet())
+
+        # Slice stepping
+        self.assertEqual(r1[0:1:2], RangeSet("1"))
+        self.assertEqual(r1[0:2:2], RangeSet("1"))
+        self.assertEqual(r1[0:3:2], RangeSet("1,4"))
+        self.assertEqual(r1[0:4:2], RangeSet("1,4"))
+        self.assertEqual(r1[0:5:2], RangeSet("1,4,10"))
+        self.assertEqual(r1[0:6:2], RangeSet("1,4,10"))
+        self.assertEqual(r1[0:7:2], RangeSet("1,4,10,12"))
+        self.assertEqual(r1[0:8:2], RangeSet("1,4,10,12"))
+        self.assertEqual(r1[0:9:2], RangeSet("1,4,10,12"))
+        self.assertEqual(r1[0:10:2], RangeSet("1,4,10,12"))
+
+        self.assertEqual(r1[0:7:3], RangeSet("1,9,12"))
+        self.assertEqual(r1[0:7:4], RangeSet("1,10"))
+
+        self.assertEqual(len(r1[1:1:2]), 0)
+        self.assertEqual(r1[1:2:2], RangeSet("2"))
+        self.assertEqual(r1[1:3:2], RangeSet("2"))
+        self.assertEqual(r1[1:4:2], RangeSet("2,9"))
+        self.assertEqual(r1[1:5:2], RangeSet("2,9"))
+        self.assertEqual(r1[1:6:2], RangeSet("2,9,11"))
+        self.assertEqual(r1[1:7:2], RangeSet("2,9,11"))
+
+        # Partial slices
+        self.assertEqual(r1[2:], RangeSet("4,9-12"))
+        self.assertEqual(r1[:3], RangeSet("1-2,4"))
+        self.assertEqual(r1[:3:2], RangeSet("1,4"))
+
+        # Twisted
+        r2 = RangeSet("1-9/2,12-32/4")
+        self.assertEqual(r2[5:10:2], RangeSet("12-28/8"))
+        self.assertEqual(r2[5:10:2], RangeSet("12-28/8", autostep=2))
+        self.assertEqual(r2[1:12:3], RangeSet("3,9,20,32"))
+
+        # FIXME: use nosetests/@raises to do that...
+        self.assertRaises(TypeError, r1.__getitem__, slice('foo', 'bar'))
+        self.assertRaises(TypeError, r1.__getitem__, slice(1, 3, 'bar'))
+
+        # TODO: timeit?
+        r3 = RangeSet("0-6000")
+        self.assertEqual(r3[300:3890], RangeSet("300-3889"))
+        r3 = RangeSet("0-6000")
+        self.assertEqual(r3[300:3890:2], RangeSet("300-3889/2"))
+        self.assertEqual(r3[300:3890:2], RangeSet("300-3889/2", autostep=2))
 
     def testSplit(self):
         """test RangeSet split()"""
-
-        # Empty nodeset
+        # Empty rangeset
         rangeset = RangeSet()
-        self.assertEqual((RangeSet(), RangeSet()), tuple(rangeset.split(2)))
-
+        self.assertEqual(len(list(rangeset.split(2))), 0)
         # Not enough element
         rangeset = RangeSet("1")
-        self.assertEqual((RangeSet("1"), RangeSet()), tuple(rangeset.split(2)))
-
+        self.assertEqual((RangeSet("1"),), tuple(rangeset.split(2)))
         # Exact number of elements
         rangeset = RangeSet("1-6")
-        self.assertEqual((RangeSet("1-2"), RangeSet("3-4"), RangeSet("5-6")), tuple(rangeset.split(3)))
+        self.assertEqual((RangeSet("1-2"), RangeSet("3-4"), RangeSet("5-6")), \
+                         tuple(rangeset.split(3)))
+        # Check limit results
+        rangeset = RangeSet("0-3")
+        for i in (4, 5):
+            self.assertEqual((RangeSet("0"), RangeSet("1"), \
+                             RangeSet("2"), RangeSet("3")), \
+                             tuple(rangeset.split(i)))
 
     def testAdd(self):
         """test RangeSet add()"""
@@ -332,9 +398,12 @@ class RangeSetTest(unittest.TestCase):
         self.assertEqual(len(r1), 241)
         self.assertEqual(r1[240], 801)
         r1.add(788)
+        self.assertEqual(str(r1), "1-100,102,105-242,788,800-801")
         self.assertEqual(len(r1), 242)
         self.assertEqual(r1[239], 788)
         self.assertEqual(r1[240], 800)
+        r1.add(812)
+        self.assertEqual(len(r1), 243)
 
     def testUnion(self):
         """test RangeSet union()"""

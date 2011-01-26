@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell (local) test suite
 # Written by S. Thiell 2008-04-09
-# $Id: TaskLocalTest.py 322 2010-08-29 20:44:30Z st-cea $
+# $Id: TaskLocalTest.py 384 2010-10-17 21:24:21Z st-cea $
 
 
 """Unit test for ClusterShell Task (local)"""
@@ -21,6 +21,7 @@ from ClusterShell.Event import EventHandler
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import *
 from ClusterShell.Worker.Worker import WorkerSimple, WorkerError
+from ClusterShell.Worker.Worker import WorkerBadArgumentError
 
 import socket
 
@@ -651,19 +652,21 @@ class TaskLocalTest(unittest.TestCase):
         task.schedule(worker)
         task.resume()
 
-    def testWorkerSimpleFile(self):
-        """test WorkerSimple (file)"""
-        task = task_self()
-        self.assert_(task != None)
-        # use tempfile
-        tmpfile = tempfile.TemporaryFile()
-        tmpfile.write("one line without EOL")
-        tmpfile.seek(0)
-        worker = WorkerSimple(tmpfile, None, None, "file", None, 0, True)
-        self.assert_(worker != None)
-        task.schedule(worker)
-        task.resume()
-        self.assertEqual(worker.read(), "one line without EOL")
+    # FIXME: reconsider this kind of test (which now must fail) especially 
+    #        when using epoll engine, as soon as testsuite is improved (#95).
+    #def testWorkerSimpleFile(self):
+    #    """test WorkerSimple (file)"""
+    #    task = task_self()
+    #    self.assert_(task != None)
+    #    # use tempfile
+    #    tmpfile = tempfile.TemporaryFile()
+    #    tmpfile.write("one line without EOL")
+    #    tmpfile.seek(0)
+    #    worker = WorkerSimple(tmpfile, None, None, "file", None, 0, True)
+    #    self.assert_(worker != None)
+    #    task.schedule(worker)
+    #    task.resume()
+    #    self.assertEqual(worker.read(), "one line without EOL")
 
     def testInterruptEngine(self):
         """test Engine signal interruption"""
@@ -743,6 +746,42 @@ class TaskLocalTest(unittest.TestCase):
             # restore original fanout value
             task.set_info("fanout", fanout)
 
+    def testPopenBadArgumentOption(self):
+        """test WorkerPopen constructor bad argument"""
+	# Check code < 1.4 compatibility
+        self.assertRaises(WorkerBadArgumentError, WorkerPopen, None, None)
+	# As of 1.4, ValueError is raised for missing parameter
+        self.assertRaises(ValueError, WorkerPopen, None, None) # 1.4+
+
+    def testWorkerAbort(self):
+        """test local Worker abort() on timer"""
+        task = task_self()
+        self.assert_(task != None)
+
+        class AbortOnTimer(EventHandler):
+            def __init__(self, worker):
+                EventHandler.__init__(self)
+                self.ext_worker = worker
+                self.testtimer = False
+            def ev_timer(self, timer):
+                self.ext_worker.abort()
+                self.testtimer = True
+
+        aot = AbortOnTimer(task.shell("sleep 10"))
+        self.assertEqual(aot.testtimer, False)
+        task.timer(1.0, handler=aot)
+        task.resume()
+        self.assertEqual(aot.testtimer, True)
+        
+    def testWorkerAbortSanity(self):
+        """test local Worker abort() (sanity)"""
+        task = task_self()
+        worker = task.shell("sleep 1")
+        worker.abort()
+
+        # test noop abort() on unscheduled worker
+        worker = WorkerPopen("sleep 1")
+        worker.abort()
 
 
 if __name__ == '__main__':

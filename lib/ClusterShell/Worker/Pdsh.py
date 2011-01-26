@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2007, 2008, 2009)
+# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -30,7 +30,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Pdsh.py 385 2010-10-19 21:36:48Z st-cea $
+# $Id: Pdsh.py 418 2010-11-30 21:42:42Z st-cea $
 
 """
 WorkerPdsh
@@ -48,7 +48,7 @@ from ClusterShell.Worker.EngineClient import EngineClient
 from ClusterShell.Worker.EngineClient import EngineClientError
 from ClusterShell.Worker.EngineClient import EngineClientNotSupportedError
 from ClusterShell.Worker.Worker import DistantWorker
-from ClusterShell.Worker.Worker import WorkerError, WorkerBadArgumentError
+from ClusterShell.Worker.Worker import WorkerError
 
 
 class WorkerPdsh(EngineClient, DistantWorker):
@@ -101,12 +101,20 @@ class WorkerPdsh(EngineClient, DistantWorker):
             # PDCP
             self.command = None
             self.mode = 'pdcp'
-            self.isdir = os.path.isdir(self.source)
             # Preserve modification times and modes?
             self.preserve = kwargs.get('preserve', False)
+            # Reverse copy (rpdcp)?
+            self.reverse = kwargs.get('reverse', False)
+            if self.reverse:
+                self.isdir = os.path.isdir(self.dest)
+                if not self.isdir:
+                    raise ValueError("reverse copy dest must be a directory")
+            else:
+                self.isdir = os.path.isdir(self.source)
         else:
-            raise WorkerBadArgumentError("missing command or source in " \
-                                         "WorkerPdsh constructor")
+            raise ValueError("missing command or source parameter in " \
+			     "WorkerPdsh constructor")
+
         self.popen = None
         self._buf = ""
 
@@ -151,7 +159,10 @@ class WorkerPdsh(EngineClient, DistantWorker):
                                                             ' '.join(cmd_l))
         else:
             # Build pdcp command
-            executable = self.task.info("pdcp_path") or "pdcp"
+            if self.reverse:
+                executable  = self.task.info('rpdcp_path') or "rpdcp"
+            else:
+                executable = self.task.info("pdcp_path") or "pdcp"
             cmd_l = [ executable, "-b" ]
 
             fanout = self.task.info("fanout", 0)
@@ -193,25 +204,22 @@ class WorkerPdsh(EngineClient, DistantWorker):
         raise EngineClientNotSupportedError("writing is not " \
                                             "supported by pdsh worker")
 
-    def _close(self, force, timeout):
+    def _close(self, abort, flush, timeout):
         """
-        Close worker. Called by engine after worker has been
-        unregistered. This method should handle all termination types
-        (normal, forced or on timeout).
+        Close client. See EngineClient._close().
         """
-        if force or timeout:
+        if abort:
             prc = self.popen.poll()
             if prc is None:
                 # process is still running, kill it
                 os.kill(self.popen.pid, signal.SIGKILL)
-            if timeout:
-                self._invoke("ev_timeout")
-        else:
-            prc = self.popen.wait()
-            if prc >= 0:
-                rc = prc
-                if rc != 0:
-                    raise WorkerError("Cannot run pdsh (error %d)" % rc)
+        prc = self.popen.wait()
+        if prc >= 0:
+            rc = prc
+            if rc != 0:
+                raise WorkerError("Cannot run pdsh (error %d)" % rc)
+        if abort and timeout:
+            self._invoke("ev_timeout")
 
         # close
         self.popen.stdin.close()
@@ -220,6 +228,7 @@ class WorkerPdsh(EngineClient, DistantWorker):
             self.popen.stderr.close()
 
         if timeout:
+            assert abort, "abort flag not set on timeout"
             for node in (self.nodes - self.closed_nodes):
                 self._on_node_timeout(node)
         else:

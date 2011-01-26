@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell (distant, pdsh worker) test suite
 # Written by S. Thiell 2009-02-13
-# $Id: TaskDistantPdshTest.py 289 2010-07-12 21:30:00Z st-cea $
+# $Id: TaskDistantPdshTest.py 404 2010-11-03 23:25:30Z st-cea $
 
 
 """Unit test for ClusterShell Task (distant, pdsh worker)"""
@@ -363,8 +363,92 @@ class TaskDistantTest(unittest.TestCase):
         self._task.set_info("command_timeout", command_timeout_orig)
 
     def testPdshBadArgumentOption(self):
-        """test WorkerPdsh bad argument option"""
-        self.assertRaises(WorkerBadArgumentError, WorkerPdsh, "localhost", None, None)
+        """test WorkerPdsh constructor bad argument"""
+	# Check code < 1.4 compatibility
+        self.assertRaises(WorkerBadArgumentError, WorkerPdsh, "localhost",
+			  None, None)
+	# As of 1.4, ValueError is raised for missing parameter
+        self.assertRaises(ValueError, WorkerPdsh, "localhost",
+			  None, None) # 1.4+
+
+    def testCopyEvents(self):
+        """test triggered events on WorkerPdsh copy"""
+        test_eh = self.__class__.TEventHandlerChecker(self)
+        dest = "/tmp/cs-test_testLocalhostPdshCopyEvents"
+        worker = WorkerPdsh("localhost", source="/etc/hosts",
+                dest=dest, handler=test_eh, timeout=10)
+        self._task.schedule(worker) 
+        self._task.resume()
+        self.assertEqual(test_eh.flags, EV_START | EV_HUP | EV_CLOSE)
+
+    def testWorkerAbort(self):
+        """test WorkerPdsh abort() on timer"""
+        task = task_self()
+        self.assert_(task != None)
+
+        class AbortOnTimer(EventHandler):
+            def __init__(self, worker):
+                EventHandler.__init__(self)
+                self.ext_worker = worker
+                self.testtimer = False
+            def ev_timer(self, timer):
+                self.ext_worker.abort()
+                self.testtimer = True
+
+        worker = WorkerPdsh("localhost", command="sleep 10",
+                handler=None, timeout=None)
+        task.schedule(worker)
+
+        aot = AbortOnTimer(worker)
+        self.assertEqual(aot.testtimer, False)
+        task.timer(2.0, handler=aot)
+        task.resume()
+        self.assertEqual(aot.testtimer, True)
+
+    def testWorkerAbortSanity(self):
+        """test WorkerPdsh abort() (sanity)"""
+        task = task_self()
+        # test noop abort() on unscheduled worker
+        worker = WorkerPdsh("localhost", command="sleep 1", handler=None,
+                            timeout=None)
+        worker.abort()
+        
+    def testLocalhostExplicitPdshReverseCopy(self):
+        """test simple localhost rcopy with explicit pdsh worker"""
+        dest = "/tmp/cs-test_testLocalhostExplicitPdshRCopy"
+        shutil.rmtree(dest, ignore_errors=True)
+        os.mkdir(dest)
+        worker = WorkerPdsh("localhost", source="/etc/hosts",
+                dest=dest, handler=None, timeout=10, reverse=True)
+        self._task.schedule(worker) 
+        self._task.resume()
+        self.assertEqual(worker.source, "/etc/hosts")
+        self.assertEqual(worker.dest, dest)
+        self.assert_(os.path.exists(os.path.join(dest, "hosts.localhost")))
+
+    def testLocalhostExplicitPdshReverseCopyDir(self):
+        """test simple localhost rcopy dir with explicit pdsh worker"""
+        dest = "/tmp/cs-test_testLocalhostExplicitPdshRCopyDirectory"
+        shutil.rmtree(dest, ignore_errors=True)
+        os.mkdir(dest)
+        worker = WorkerPdsh("localhost", source="/etc/rc.d",
+                dest=dest, handler=None, timeout=30, reverse=True)
+        self._task.schedule(worker) 
+        self._task.resume()
+        self.assert_(os.path.isdir(os.path.join(dest, "rc.d.localhost")))
+
+    def testLocalhostExplicitPdshReverseCopyDirPreserve(self):
+        """test simple localhost preserve rcopy dir with explicit pdsh worker"""
+        # pdcp worker doesn't create custom destination directory
+        dest = "/tmp/cs-test_testLocalhostExplicitPdshPreserveCopyDirectory"
+        shutil.rmtree(dest, ignore_errors=True)
+        os.mkdir(dest)
+        worker = WorkerPdsh("localhost", source="/etc/rc.d",
+                dest=dest, handler=None, timeout=30, preserve=True,
+                reverse=True)
+        self._task.schedule(worker) 
+        self._task.resume()
+        self.assert_(os.path.isdir(os.path.join(dest, "rc.d.localhost")))
 
 
 if __name__ == '__main__':

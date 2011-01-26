@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010)
+# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010, 2011)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -30,7 +30,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Task.py 389 2010-10-20 20:33:38Z st-cea $
+# $Id: Task.py 435 2011-01-15 22:34:20Z st-cea $
 
 """
 ClusterShell Task module.
@@ -433,10 +433,10 @@ class Task(object):
         using this method and retrieve them with info().
         
         The following example changes the fanout value to 128:
-        >>> task.set_info('fanout', 128)
+            >>> task.set_info('fanout', 128)
 
         The following example enables debug messages:
-        >>> task.set_info('debug', True)
+            >>> task.set_info('debug', True)
 
         Task info_keys are:
           - "debug": Boolean value indicating whether to enable library
@@ -500,6 +500,7 @@ class Task(object):
                   [, strderr=enable_stderr])
 
         Example:
+
         >>> task = task_self()
         >>> task.shell("/bin/date", nodes="node[1-2345]")
         >>> task.resume()
@@ -536,16 +537,25 @@ class Task(object):
         assert nodes != None, "local copy not supported"
 
         handler = kwargs.get("handler", None)
+        stderr = kwargs.get("stderr", self.default("stderr"))
         timeo = kwargs.get("timeout", None)
         preserve = kwargs.get("preserve", None)
-        stderr = kwargs.get("stderr", self.default("stderr"))
+        reverse = kwargs.get("reverse", False)
 
         # create a new copy worker
         worker = WorkerSsh(nodes, source=source, dest=dest, handler=handler,
-                           stderr=stderr, timeout=timeo, preserve=preserve)
+                           stderr=stderr, timeout=timeo, preserve=preserve,
+                           reverse=reverse)
 
         self.schedule(worker)
         return worker
+
+    def rcopy(self, source, dest, nodes, **kwargs):
+        """
+        Copy distant file or directory to local node.
+        """
+        kwargs['reverse'] = True
+        return self.copy(source, dest, nodes, **kwargs)
 
     @tasksyncmethod()
     def _add_port(self, port):
@@ -631,6 +641,7 @@ class Task(object):
         running (eg. called from an event handler) or as soon as the
         task is started otherwise. Only useful for manually instantiated
         workers, for example:
+
         >>> task = task_self()
         >>> worker = WorkerSsh("node[2-3]", None, 10, command="/bin/ls")
         >>> task.schedule(worker)
@@ -678,6 +689,8 @@ class Task(object):
         In that case, you may then want to call task_wait() to wait for
         completion.
         """
+        # If you change options here, check Task.run() compatibility.
+
         self.timeout = timeout
 
         self._suspend_cond.atomic_dec()
@@ -686,6 +699,43 @@ class Task(object):
             self._resume()
         else:
             self._resume_thread()
+
+    def run(self, command=None, **kwargs):
+        """
+        With arguments, it will schedule a command exactly like a Task.shell()
+        would have done it and run it.
+        This is the easiest way to simply run a command.
+
+        >>> task.run("hostname", nodes="foo")
+
+        Without argument, it starts all outstanding actions. 
+        It behaves like Task.resume().
+
+        >>> task.shell("hostname", nodes="foo")
+        >>> task.shell("hostname", nodes="bar")
+        >>> task.run()
+        """
+        worker = None
+        timeout = 0
+
+        # Both resume() and shell() support a 'timeout' parameter. We need a
+        # trick to behave correctly for both cases.
+        #
+        # Here, we mock: task.resume(10)
+        if type(command) in (int, float):
+            timeout = command
+            command = None
+        # Here, we mock: task.resume(timeout=10)
+        elif 'timeout' in kwargs and command is None:
+            timeout = kwargs.pop('timeout')
+        # All other cases mean a classical: shell(...)
+        # we mock: task.shell("mycommand", [timeout=..., ...])
+        elif command is not None:
+            worker = self.shell(command, **kwargs)
+
+        self.resume(timeout)
+
+        return worker
 
     @tasksyncmethod()
     def _suspend_wait(self):
