@@ -5,6 +5,7 @@ clustershell (1.4-1) unstable; urgency=low
     - python-support (>= 0.6)
     - python-all(>= 2.4)
     - python-setuptools (>= 0.6)
+  * Remove debian/dir useless file
 
  -- Stéphan Gorget <phantez@gmail.com>  Wed, 26 Jan 2011 10:48:28 +0100
 
