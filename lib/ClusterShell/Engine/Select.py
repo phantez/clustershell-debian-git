@@ -1,6 +1,9 @@
 #
 # Copyright CEA/DAM/DIF (2009, 2010, 2011)
-#  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
+#  Contributors:
+#   Henri DOREAU <henri.doreau@gmail.com>
+#   Aurelien DEGREMONT <aurelien.degremont@cea.fr>
+#   Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
 #
@@ -30,87 +33,77 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: EPoll.py 460 2011-02-07 23:22:45Z st-cea $
+# $Id: Select.py 454 2011-02-06 21:42:36Z st-cea $
 
 """
-A ClusterShell Engine using epoll, an I/O event notification facility.
+A select() based ClusterShell Engine.
 
-The epoll event distribution interface is available on Linux 2.6, and
-has been included in Python 2.6.
+The select() system call is available on almost every UNIX-like systems.
 """
 
 import errno
 import select
+import sys
 import time
 
 from ClusterShell.Engine.Engine import Engine
-from ClusterShell.Engine.Engine import EngineNotSupportedError
 from ClusterShell.Engine.Engine import EngineTimeoutException
 from ClusterShell.Worker.EngineClient import EngineClientEOF
 
 
-class EngineEPoll(Engine):
+class EngineSelect(Engine):
     """
-    EPoll Engine
+    Select Engine
 
-    ClusterShell Engine class using the select.epoll mechanism.
+    ClusterShell engine using the select.select mechanism
     """
 
-    identifier = "epoll"
+    identifier = "select"
 
     def __init__(self, info):
         """
         Initialize Engine.
         """
         Engine.__init__(self, info)
-        try:
-            # get an epoll object
-            self.epolling = select.epoll()
-        except AttributeError:
-            raise EngineNotSupportedError(EngineEPoll.identifier)
+        self._fds_r = []
+        self._fds_w = []
 
     def _register_specific(self, fd, event):
         """
         Engine-specific fd registering. Called by Engine register.
         """
         if event & (Engine.E_READ | Engine.E_ERROR):
-            eventmask = select.EPOLLIN
-        elif event == Engine.E_WRITE:
-            eventmask = select.EPOLLOUT
-
-        self.epolling.register(fd, eventmask)
+            self._fds_r.append(fd)
+        elif event & Engine.E_WRITE:
+            self._fds_w.append(fd)
 
     def _unregister_specific(self, fd, ev_is_set):
         """
         Engine-specific fd unregistering. Called by Engine unregister.
         """
-        self._debug("UNREGSPEC fd=%d ev_is_set=%x"% (fd, ev_is_set))
-        if ev_is_set:
-            self.epolling.unregister(fd)
+        if ev_is_set or True:
+            if fd in self._fds_r:
+                self._fds_r.remove(fd)
+            if fd in self._fds_w:
+                self._fds_w.remove(fd)
 
     def _modify_specific(self, fd, event, setvalue):
         """
-        Engine-specific modifications after a interesting event change for
-        a file descriptor. Called automatically by Engine set_events().
-        For the epoll engine, it modifies the event mask associated to a file
-        descriptor.
+        Engine-specific modifications after a interesting event change
+        for a file descriptor. Called automatically by Engine
+        register/unregister and set_events(). For the select() engine,
+        it appends/remove the fd to/from the concerned fd_sets.
         """
         self._debug("MODSPEC fd=%d event=%x setvalue=%d" % (fd, event,
                                                             setvalue))
-        eventmask = 0
         if setvalue:
-            if event & (Engine.E_READ | Engine.E_ERROR):
-                eventmask = select.EPOLLIN
-            elif event == Engine.E_WRITE:
-                eventmask = select.EPOLLOUT
-
-            self.epolling.register(fd, eventmask)
+            self._register_specific(fd, event)
         else:
-            self.epolling.unregister(fd)
+            self._unregister_specific(fd, True)
 
     def runloop(self, timeout):
         """
-        Run epoll main loop.
+        Select engine run(): start clients and properly get replies
         """
         if timeout == 0:
             timeout = -1
@@ -119,9 +112,8 @@ class EngineEPoll(Engine):
 
         # run main event loop...
         while self.evlooprefcnt > 0:
-            self._debug("LOOP evlooprefcnt=%d (reg_clifds=%s) (timers=%d)" % \
-                    (self.evlooprefcnt, self.reg_clifds.keys(),
-                     len(self.timerq)))
+            self._debug("LOOP evlooprefcnt=%d (reg_clifds=%s) (timers=%d)" % 
+                (self.evlooprefcnt, self.reg_clifds.keys(), len(self.timerq)))
             try:
                 timeo = self.timerq.nextfire_delay()
                 if timeout > 0 and timeo >= timeout:
@@ -132,18 +124,28 @@ class EngineEPoll(Engine):
                     timeo = timeout
 
                 self.reg_clifds_changed = False
-                evlist = self.epolling.poll(timeo + 0.001)
-
-            except IOError, e:
+                if timeo >= 0:
+                    r_ready, w_ready, x_ready = \
+                        select.select(self._fds_r, self._fds_w, [], timeo)
+                else:
+                    # no timeout specified, do not supply the timeout argument
+                    r_ready, w_ready, x_ready = \
+                        select.select(self._fds_r, self._fds_w, [])
+            except select.error, (ex_errno, ex_strerror):
                 # might get interrupted by a signal
-                if e.errno == errno.EINTR:
+                if ex_errno == errno.EINTR:
                     continue
+                elif ex_errno in [errno.EINVAL, errno.EBADF, errno.ENOMEM]:
+                    print >> sys.stderr, "EngineSelect: %s" % ex_strerror
+                else:
+                    raise
 
-            for fd, event in evlist:
+            # iterate over fd on which events occured
+            for fd in set(r_ready) | set(w_ready):
 
                 if self.reg_clifds_changed:
-                    self._debug("REG CLIENTS CHANGED - Aborting current evlist")
-                    # Oops, reconsider evlist by calling poll() again.
+                    self._debug("REG CLIENTS CHANGED - Aborting current fdlist")
+                    # Oops, reconsider fdlist by calling select() again.
                     break
 
                 # get client instance
@@ -154,16 +156,8 @@ class EngineEPoll(Engine):
                 # process this client
                 client._processing = True
 
-                # check for poll error condition of some sort
-                if event & select.EPOLLERR:
-                    self._debug("EPOLLERR %s" % client)
-                    self.unregister_writer(client)
-                    client.file_writer.close()
-                    client.file_writer = None
-                    continue
-
-                # check for data to read
-                if event & select.EPOLLIN:
+                # check for possible unblocking read on this fd
+                if fd in r_ready:
                     assert fdev & (Engine.E_READ | Engine.E_ERROR)
                     assert client._events & fdev
                     self.modify(client, 0, fdev)
@@ -172,35 +166,27 @@ class EngineEPoll(Engine):
                             client._handle_read()
                         else:
                             client._handle_error()
-                    except EngineClientEOF, e:
+                    except EngineClientEOF:
                         self._debug("EngineClientEOF %s" % client)
+                        # if the EOF occurs on E_READ...
                         if fdev & Engine.E_READ:
-                            self.remove(client)
-                        continue
-
-                # or check for end of stream (do not handle both at the same
-                # time because handle_read() may perform a partial read)
-                elif event & select.EPOLLHUP:
-                    self._debug("EPOLLHUP fd=%d %s (r%s,e%s,w%s)" % (fd,
-                        client.__class__.__name__, client.reader_fileno(),
-                        client.error_fileno(), client.writer_fileno()))		
-                    client._processing = False
-
-                    if fdev & Engine.E_READ:
-                        if client._events & Engine.E_ERROR:
-                            self.modify(client, 0, fdev)
+                            # and if the client is also waiting for E_ERROR
+                            if client._events & Engine.E_ERROR:
+                                # just clear the event for E_READ
+                                self.modify(client, 0, fdev)
+                            else:
+                                # otherwise we can remove the client
+                                self.remove(client)
                         else:
-                            self.remove(client)
-                    else:
-                        if client._events & Engine.E_READ:
-                            self.modify(client, 0, fdev)
-                        else:
-                            self.remove(client)
-                    continue
+                            # same thing in the other order...
+                            if client._events & Engine.E_READ:
+                                self.modify(client, 0, fdev)
+                            else:
+                                self.remove(client)
 
                 # check for writing
-                if event & select.EPOLLOUT:
-                    self._debug("EPOLLOUT fd=%d %s (r%s,e%s,w%s)" % (fd,
+                if fd in w_ready:
+                    self._debug("W_READY fd=%d %s (r%s,e%s,w%s)" % (fd,
                         client.__class__.__name__, client.reader_fileno(),
                         client.error_fileno(), client.writer_fileno()))
                     assert fdev == Engine.E_WRITE

@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 
 %:
-	dh $@
+	dh $@ --with python2
 
 get-orig-tarball:
 	uscan --verbose --force-download

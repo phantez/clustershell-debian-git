@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2010)
+# Copyright CEA/DAM/DIF (2010, 2011)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -31,15 +31,17 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Error.py 375 2010-09-28 23:19:15Z st-cea $
+# $Id: Error.py 470 2011-02-24 20:27:28Z st-cea $
 
 """
 CLI error handling helper functions
 """
 
+import os.path
 import signal
 import sys
 
+from ClusterShell.Engine.Engine import EngineNotSupportedError
 from ClusterShell.CLI.Utils import GroupResolverConfigError  # dummy but safe
 from ClusterShell.NodeUtils import GroupResolverSourceError
 from ClusterShell.NodeUtils import GroupSourceException
@@ -48,7 +50,8 @@ from ClusterShell.NodeSet import NodeSetExternalError, NodeSetParseError
 from ClusterShell.NodeSet import RangeSetParseError
 
 
-GENERIC_ERRORS = (NodeSetExternalError,
+GENERIC_ERRORS = (EngineNotSupportedError,
+                  NodeSetExternalError,
                   NodeSetParseError,
                   RangeSetParseError,
                   GroupResolverSourceError,
@@ -57,10 +60,13 @@ GENERIC_ERRORS = (NodeSetExternalError,
                   IOError,
                   KeyboardInterrupt)
 
-def handle_generic_error(excobj, prog=sys.argv[0]):
+def handle_generic_error(excobj, prog=os.path.basename(sys.argv[0])):
     """handle error given `excobj' generic script exception"""
     try:
         raise excobj
+    except EngineNotSupportedError, exc:
+        print >> sys.stderr, "%s: I/O events engine '%s' not supported on " \
+            "this host" % (prog, exc.engineid)
     except NodeSetExternalError, exc:
         print >> sys.stderr, "%s: External error:" % prog, exc
     except (NodeSetParseError, RangeSetParseError), exc:
