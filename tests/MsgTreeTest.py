@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell test suite
 # Written by S. Thiell 2010-02-03
-# $Id: MsgTreeTest.py 419 2010-11-30 21:46:12Z st-cea $
+# $Id: MsgTreeTest.py 481 2011-03-08 23:20:20Z st-cea $
 
 
 """Unit test for ClusterShell MsgTree Class"""
@@ -189,6 +189,31 @@ class MsgTreeTest(unittest.TestCase):
         cnt = 0
         for msg, keys in tree.walk():
             cnt += 1
+
+    def testMsgTreeTraceMode(self):
+        """test MsgTree in trace mode"""
+        tree = MsgTree(trace=True)
+        tree.add("item1", "message0")
+        self.assertEqual(len(tree), 1)
+        tree.add("item2", "message2")
+        tree.add("item3", "message2")
+        tree.add("item4", "message3")
+        tree.add("item2", "message4")
+        tree.add("item3", "message4")
+        self.assertEqual(len(tree), 4)
+        self.assertEqual(tree["item1"], "message0")
+        self.assertEqual(tree.get("item1"), "message0")
+        self.assertEqual(tree["item2"], "message2\nmessage4")
+        self.assertEqual(tree.get("item2"), "message2\nmessage4")
+        self.assertEqual(tree.get("item5", "default_buf"), "default_buf")
+        self.assertEqual(tree._depth(), 2)
+        self.assertEqual(len(list(tree.walk())), 4)
+        self.assertEqual(list(tree.walk_trace()), \
+            [('message0', ['item1'], 1, 0),
+             ('message2', ['item2', 'item3'], 1, 1),
+             ('message4', ['item2', 'item3'], 2, 0),
+             ('message3', ['item4'], 1, 0)])
+
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(MsgTreeTest)
