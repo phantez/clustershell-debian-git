@@ -1,6 +1,7 @@
 clustershell (1.4.3-1) unstable; urgency=low
 
-  * New upstream release
+  * New upstream release 1.4.3
+  * Changed to use dh_python2
   * Debian policy 3.9.2
 
  -- Stéphan Gorget <phantez@gmail.com>  Sat, 16 Apr 2011 18:15:05 +0200
