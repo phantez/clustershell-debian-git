@@ -31,7 +31,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: OptionParser.py 482 2011-03-09 00:13:50Z st-cea $
+# $Id: OptionParser.py 507 2011-06-07 22:33:01Z st-cea $
 
 """
 common ClusterShell CLI OptionParser
@@ -109,7 +109,7 @@ class OptionParser(optparse.OptionParser):
             verbose_options=False,
             separator_option=False,
             dshbak_compat=False,
-            msgtree_trace=False):
+            msgtree_mode=False):
         """Install options needed by Display class"""
         optgrp = optparse.OptionGroup(self, "Output behaviour")
         if verbose_options:
@@ -149,9 +149,12 @@ class OptionParser(optparse.OptionParser):
             optgrp.add_option("-S", action="store_true", dest="maxrc",
                               help="return the largest of command return codes")
 
-        if msgtree_trace:
+        if msgtree_mode:
+            optgrp.add_option("-F", "--fast", action="store_true",
+                              dest="fast_mode",
+                              help="faster but memory hungry mode")
             optgrp.add_option("-T", "--tree", action="store_true",
-                              dest="tree_mode",
+                              dest="trace_mode",
                               help="message tree trace mode")
 
         optgrp.add_option("--color", action="store", dest="whencolor",

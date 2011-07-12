@@ -31,7 +31,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Clush.py 490 2011-03-19 16:09:05Z st-cea $
+# $Id: Clush.py 497 2011-05-15 20:18:23Z st-cea $
 
 """
 execute cluster commands in parallel
@@ -441,12 +441,10 @@ def ttyloop(task, nodeset, timeout, display):
             raise kbe
 
         if task.default("USER_running"):
-            ns_reg, ns_unreg = NodeSet(), NodeSet()
-            for c in task._engine.clients():
-                if c.registered:
-                    ns_reg.add(c.key)
-                else:
-                    ns_unreg.add(c.key)
+            ns_reg = NodeSet.fromlist([c.key for c in task._engine.clients()])
+            ns_unreg = NodeSet.fromlist([c.key for c in \
+                                         task._engine.pending_clients()])
+            ns_reg -= ns_unreg
             if ns_unreg:
                 pending = "\nclush: pending(%d): %s" % (len(ns_unreg), ns_unreg)
             else:

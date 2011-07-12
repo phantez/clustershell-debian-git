@@ -31,7 +31,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: setup.py 493 2011-03-19 20:25:12Z st-cea $
+# $Id: setup.py 512 2011-06-09 16:58:25Z st-cea $
 
 import os
 from setuptools import setup, find_packages
@@ -44,7 +44,7 @@ if not os.access('scripts/clush', os.F_OK):
 if not os.access('scripts/nodeset', os.F_OK):
     os.symlink('nodeset.py', 'scripts/nodeset')
 
-VERSION='1.4.3'
+VERSION='1.5.1'
 
 setup(name='ClusterShell',
       version=VERSION,

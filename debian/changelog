@@ -1,3 +1,9 @@
+clustershell (1.5.1-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- Stéphan Gorget <phantez@gmail.com>  Tue, 12 Jul 2011 18:45:38 +0200
+
 clustershell (1.4.3-1) unstable; urgency=low
 
   * New upstream release 1.4.3

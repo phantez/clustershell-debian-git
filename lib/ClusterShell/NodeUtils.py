@@ -31,7 +31,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: NodeUtils.py 285 2010-06-28 22:27:41Z st-cea $
+# $Id: NodeUtils.py 509 2011-06-07 23:13:52Z st-cea $
 
 """
 Cluster nodes utility module
@@ -291,8 +291,9 @@ class GroupResolverConfig(GroupResolver):
             self.default_sourcename = self.config.get('Main', 'default')
             if self.default_sourcename and self.default_sourcename \
                                             not in group_sections:
-                raise GroupResolverConfigError("Default group source not found: "
-                        "\"%s\"" % self.default_sourcename)
+                raise GroupResolverConfigError( \
+                    "Default group source not found: \"%s\"" % \
+                        self.default_sourcename)
         except (NoSectionError, NoOptionError):
             pass
 
