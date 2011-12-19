@@ -1,0 +1,11 @@
+--- a/conf/groups.conf
++++ b/conf/groups.conf
+@@ -11,7 +11,7 @@ default: local
+ [local]
+ map: awk -F: '/^$GROUP:/ {print $2}' /etc/clustershell/groups
+ all: awk -F: '/^all:/ {print $2}' /etc/clustershell/groups
+-list: awk -F: '/^[[:alnum:]_]/ {print $1}' /etc/clustershell/groups
++list: awk -F: '/^[0-9A-Za-z_-]/ {print $1}' /etc/clustershell/groups
+ 
+ [genders]
+ map: nodeattr -n $GROUP
