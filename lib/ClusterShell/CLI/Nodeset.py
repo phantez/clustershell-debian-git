@@ -31,7 +31,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Nodeset.py 492 2011-03-19 20:12:04Z st-cea $
+# $Id: Nodeset.py 503 2011-05-29 21:30:24Z st-cea $
 
 """
 compute advanced nodeset operations
@@ -166,7 +166,7 @@ def nodeset():
         STD_GROUP_RESOLVER.default_sourcename = options.groupsource
 
     # Instantiate RangeSet or NodeSet object
-    xset = class_set()
+    xset = class_set(autostep=options.autostep)
 
     if options.all:
         # Include all nodes from external node groups support.
@@ -220,7 +220,7 @@ def nodeset():
     else:
         xsubres = len
 
-    if not xset:
+    if not xset or options.maxsplit <= 1:
         print xsubres(xset)
     else:
         for xsubset in xset.split(options.maxsplit):

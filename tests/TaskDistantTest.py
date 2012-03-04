@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell (distant) test suite
 # Written by S. Thiell 2009-02-13
-# $Id: TaskDistantTest.py 456 2011-02-06 21:53:43Z st-cea $
+# $Id: TaskDistantTest.py 508 2011-06-07 23:13:02Z st-cea $
 
 
 """Unit test for ClusterShell Task (distant)"""
@@ -654,6 +654,20 @@ class TaskDistantTest(unittest.TestCase):
         finally:
             shutil.rmtree(dtmp_dst, ignore_errors=True)
             shutil.rmtree(dtmp_src, ignore_errors=True)
+
+    def testErroneousSshPath(self):
+        """test erroneous ssh_path behavior"""
+        try:
+            self._task.set_info("ssh_path", "/wrong/path/to/ssh")
+            # init worker
+            worker = self._task.shell("/bin/echo ok", nodes='localhost')
+            self.assert_(worker != None)
+            # run task
+            self._task.resume()
+            self.assertEqual(self._task.max_retcode(), 255)
+        finally:
+            # restore fanout value
+            self._task.set_info("ssh_path", None)
 
 
 if __name__ == '__main__':
