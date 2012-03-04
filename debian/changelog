@@ -1,3 +1,10 @@
+clustershell (1.5.1-1~bpo60+1) squeeze-backports; urgency=low
+
+  * Rebuild for squeeze-backports.
+  * No changes needed.
+
+ -- Lucas Nussbaum <lucas@debian.org>  Sun, 04 Mar 2012 08:37:45 +0100
+
 clustershell (1.5.1-1) unstable; urgency=low
 
   * New upstream release
