@@ -1,3 +1,10 @@
+clustershell (1.5.1-1~bpo60+2) squeeze-backports; urgency=low
+
+  * For some reason, my sbuild setup was broken and generated dependencies
+    against packages in testing. This upload fixes that.
+
+ -- Lucas Nussbaum <lucas@debian.org>  Tue, 20 Mar 2012 11:45:39 +0100
+
 clustershell (1.5.1-1~bpo60+1) squeeze-backports; urgency=low
 
   * Rebuild for squeeze-backports.
