@@ -1,7 +1,7 @@
 %{!?python_sitelib: %global python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")}
 
 Name:          clustershell
-Version:       1.5.1
+Version:       1.6
 Release:       1%{?dist}
 Summary:       Python framework for efficient cluster administration
 
@@ -41,8 +41,9 @@ rm -rf %{buildroot}
 %{__python} setup.py install -O1 --skip-build --root %{buildroot}
 
 # config files
-install -d %{buildroot}/%{_sysconfdir}/clustershell
-install -p -m 0644 conf/*.conf %{buildroot}/%{_sysconfdir}/clustershell/
+install -d %{buildroot}/%{_sysconfdir}/clustershell/groups.conf.d
+install -p -m 0644 conf/*.conf conf/groups %{buildroot}/%{_sysconfdir}/clustershell/
+install -p -m 0644 conf/groups.conf.d/README conf/groups.conf.d/*.conf.example %{buildroot}/%{_sysconfdir}/clustershell/groups.conf.d
 
 # man pages
 install -d %{buildroot}/%{_mandir}/{man1,man5}
@@ -51,6 +52,11 @@ install -p -m 0644 doc/man/man1/clush.1 %{buildroot}/%{_mandir}/man1/
 install -p -m 0644 doc/man/man1/nodeset.1 %{buildroot}/%{_mandir}/man1/
 install -p -m 0644 doc/man/man5/clush.conf.5 %{buildroot}/%{_mandir}/man5/
 install -p -m 0644 doc/man/man5/groups.conf.5 %{buildroot}/%{_mandir}/man5/
+
+# docs and example scripts
+install -d %{buildroot}/%{_defaultdocdir}/%{name}-%{version}/examples
+install -p -m 0644 README ChangeLog Licence_CeCILL-C_V1-en.txt Licence_CeCILL-C_V1-fr.txt %{buildroot}/%{_defaultdocdir}/%{name}-%{version}/
+install -p -m 0755 doc/examples/*.py %{buildroot}/%{_defaultdocdir}/%{name}-%{version}/examples/
 
 # vim addons
 %define vimdatadir %{_datadir}/vim/vimfiles
@@ -65,7 +71,7 @@ rm -rf %{buildroot}
 
 %files
 %defattr(-,root,root,-)
-%doc README ChangeLog Licence_CeCILL-C_V1-en.txt Licence_CeCILL-C_V1-fr.txt
+%doc %{_defaultdocdir}/%{name}-%{version}/
 %{_mandir}/man1/clubak.1*
 %{_mandir}/man1/clush.1*
 %{_mandir}/man1/nodeset.1*
@@ -73,7 +79,11 @@ rm -rf %{buildroot}
 %{_mandir}/man5/groups.conf.5*
 %dir %{_sysconfdir}/clustershell
 %config(noreplace) %{_sysconfdir}/clustershell/clush.conf
+%config(noreplace) %{_sysconfdir}/clustershell/groups
 %config(noreplace) %{_sysconfdir}/clustershell/groups.conf
+%dir %{_sysconfdir}/clustershell/groups.conf.d
+%doc %{_sysconfdir}/clustershell/groups.conf.d/README
+%doc %{_sysconfdir}/clustershell/groups.conf.d/*.conf.example
 %{python_sitelib}/ClusterShell/
 %{python_sitelib}/ClusterShell-*-py?.?.egg-info
 %{_bindir}/clubak
@@ -87,6 +97,9 @@ rm -rf %{buildroot}
 %{vimdatadir}/syntax/groupsconf.vim
 
 %changelog
+* Sun Apr 08 2012 Stephane Thiell <stephane.thiell@cea.fr> 1.6-1
+- update to 1.6
+
 * Thu Jun 09 2011 Stephane Thiell <stephane.thiell@cea.fr> 1.5.1-1
 - update to 1.5.1
 

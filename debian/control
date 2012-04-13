@@ -3,12 +3,12 @@ Section: net
 Priority: optional
 Maintainer: Python Applications Packaging Team <python-apps-team@lists.alioth.debian.org>
 Uploaders: Stéphan Gorget <phantez@gmail.com>
-Homepage: http://sourceforge.net/projects/clustershell/
+Homepage: http://cea-hpc.github.com/clustershell/
 Build-Depends: debhelper (>= 7), python-all(>= 2.6.6-3~), python-setuptools (>= 0.6)
 X-Python-Version: >= 2.4
-Standards-Version: 3.9.2
-Vcs-Svn: svn://svn.debian.org/python-apps/packages/clustershell/trunk/
-Vcs-Browser: http://svn.debian.org/viewsvn/python-apps/packages/clustershell/trunk/
+Standards-Version: 3.9.3
+Vcs-Svn: https://github.com/cea-hpc/clustershell.git
+Vcs-Browser: https://github.com/cea-hpc/clustershell
 
 Package: clustershell
 Architecture: all

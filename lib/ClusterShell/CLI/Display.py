@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2010, 2011)
+# Copyright CEA/DAM/DIF (2010, 2011, 2012)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -30,13 +30,12 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: Display.py 482 2011-03-09 00:13:50Z st-cea $
 
 """
 CLI results display class
 """
 
+import difflib
 import sys
 
 from ClusterShell.NodeSet import NodeSet
@@ -46,7 +45,9 @@ VERB_QUIET = 0
 VERB_STD = 1
 VERB_VERB = 2
 VERB_DEBUG = 3
-WHENCOLOR_CHOICES = ["never", "always", "auto"]
+THREE_CHOICES = ["never", "always", "auto"]
+WHENCOLOR_CHOICES = THREE_CHOICES   # deprecated; use THREE_CHOICES
+
 
 class Display(object):
     """
@@ -55,7 +56,16 @@ class Display(object):
     COLOR_RESULT_FMT = "\033[32m%s\033[0m"
     COLOR_STDOUT_FMT = "\033[34m%s\033[0m"
     COLOR_STDERR_FMT = "\033[31m%s\033[0m"
+    COLOR_DIFFHDR_FMT = "\033[1m%s\033[0m"
+    COLOR_DIFFHNK_FMT = "\033[36m%s\033[0m"
+    COLOR_DIFFADD_FMT = "\033[32m%s\033[0m"
+    COLOR_DIFFDEL_FMT = "\033[31m%s\033[0m"
     SEP = "-" * 15
+
+    class _KeySet(set):
+        """Private NodeSet substition to display raw keys"""
+        def __str__(self):
+            return ",".join(self)
 
     def __init__(self, options, config=None, color=None):
         """Initialize a Display object from CLI.OptionParser options
@@ -64,8 +74,17 @@ class Display(object):
         If `color' boolean flag is not specified, it is auto detected
         according to options.whencolor.
         """
+        if options.diff:
+            self._print_buffer = self._print_diff
+        else:
+            self._print_buffer = self._print_content
         self._display = self._print_buffer
-        self.gather = options.gatherall or options.gather
+        self._diffref = None
+        # diff implies at least -b
+        self.gather = options.gatherall or options.gather or options.diff
+        # check parameter combinaison
+        if options.diff and options.line_mode:
+            raise ValueError("diff not supported in line_mode")
         self.line_mode = options.line_mode
         self.label = options.label
         self.regroup = options.regroup
@@ -77,7 +96,7 @@ class Display(object):
         if color is None:
             # Should we use ANSI colors?
             color = False
-            if options.whencolor == "auto":
+            if not options.whencolor or options.whencolor == "auto":
                 color = sys.stdout.isatty()
             elif options.whencolor == "always":
                 color = True
@@ -89,8 +108,14 @@ class Display(object):
         if self._color:
             self.color_stdout_fmt = self.COLOR_STDOUT_FMT
             self.color_stderr_fmt = self.COLOR_STDERR_FMT
+            self.color_diffhdr_fmt = self.COLOR_DIFFHDR_FMT
+            self.color_diffctx_fmt = self.COLOR_DIFFHNK_FMT
+            self.color_diffadd_fmt = self.COLOR_DIFFADD_FMT
+            self.color_diffdel_fmt = self.COLOR_DIFFDEL_FMT
         else:
-            self.color_stdout_fmt = self.color_stderr_fmt = "%s"
+            self.color_stdout_fmt = self.color_stderr_fmt = \
+                self.color_diffhdr_fmt = self.color_diffctx_fmt = \
+                self.color_diffadd_fmt = self.color_diffdel_fmt = "%s"
 
         # Set display verbosity
         if config:
@@ -106,6 +131,11 @@ class Display(object):
                 self.verbosity = VERB_VERB
             if hasattr(options, 'debug') and options.debug:
                 self.verbosity = VERB_DEBUG
+
+    def flush(self):
+        """flush display object buffers"""
+        # only used to reset diff display for now
+        self._diffref = None
 
     def _getlmode(self):
         """line_mode getter"""
@@ -129,7 +159,7 @@ class Display(object):
         """Format nodeset-based header."""
         indstr = " " * indent
         nodecntstr = ""
-        if self.node_count and len(nodeset) > 1:
+        if self.verbosity >= VERB_STD and self.node_count and len(nodeset) > 1:
             nodecntstr = " (%d)" % len(nodeset)
         if not self.label:
             return ""
@@ -157,13 +187,48 @@ class Display(object):
     def print_gather(self, nodeset, obj):
         """Generic method for displaying nodeset/content according to current
         object settings."""
-        if type(nodeset) is str:
-            nodeset = NodeSet(nodeset)
-        return self._display(nodeset, obj)
+        return self._display(NodeSet(nodeset), obj)
 
-    def _print_buffer(self, nodeset, content):
+    def print_gather_keys(self, keys, obj):
+        """Generic method for displaying raw keys/content according to current
+        object settings (used by clubak)."""
+        return self._display(self.__class__._KeySet(keys), obj)
+
+    def _print_content(self, nodeset, content):
         """Display a dshbak-like header block and content."""
         self.out.write("%s\n%s\n" % (self.format_header(nodeset), content))
+
+    def _print_diff(self, nodeset, content):
+        """Display unified diff between remote gathered outputs."""
+        if self._diffref is None:
+            self._diffref = (nodeset, content)
+        else:
+            nodeset_ref, content_ref = self._diffref
+            nsstr_ref = self._format_nodeset(nodeset_ref)
+            nsstr = self._format_nodeset(nodeset)
+            if self.verbosity >= VERB_STD and self.node_count:
+                if len(nodeset_ref) > 1:
+                    nsstr_ref += " (%d)" % len(nodeset_ref)
+                if len(nodeset) > 1:
+                    nsstr += " (%d)" % len(nodeset)
+
+            udiff = difflib.unified_diff(list(content_ref), list(content), \
+                                         fromfile=nsstr_ref, tofile=nsstr, \
+                                         lineterm='')
+            output = ""
+            for line in udiff:
+                if line.startswith('---') or line.startswith('+++'):
+                    output += self.color_diffhdr_fmt % line.rstrip()
+                elif line.startswith('@@'):
+                    output += self.color_diffctx_fmt % line
+                elif line.startswith('+'):
+                    output += self.color_diffadd_fmt % line
+                elif line.startswith('-'):
+                    output += self.color_diffdel_fmt % line
+                else:
+                    output += line
+                output += '\n'
+            self.out.write(output)
 
     def _print_lines(self, nodeset, msg):
         """Display a MsgTree buffer by line with prefixed header."""

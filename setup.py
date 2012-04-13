@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2008, 2009, 2010, 2011)
+# Copyright CEA/DAM/DIF (2008, 2009, 2010, 2011, 2012)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library. 
@@ -30,8 +30,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: setup.py 512 2011-06-09 16:58:25Z st-cea $
 
 import os
 from setuptools import setup, find_packages
@@ -44,7 +42,7 @@ if not os.access('scripts/clush', os.F_OK):
 if not os.access('scripts/nodeset', os.F_OK):
     os.symlink('nodeset.py', 'scripts/nodeset')
 
-VERSION='1.5.1'
+VERSION='1.6'
 
 setup(name='ClusterShell',
       version=VERSION,

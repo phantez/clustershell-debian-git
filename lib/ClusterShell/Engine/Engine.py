@@ -29,8 +29,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: Engine.py 500 2011-05-29 16:18:05Z st-cea $
 
 """
 Interface of underlying Task's Engine.
@@ -39,9 +37,9 @@ An Engine implements a loop your thread enters and uses to call event handlers
 in response to incoming events (from workers, timers, etc.).
 """
 
-import copy
 import errno
 import heapq
+import logging
 import time
 
 
@@ -362,10 +360,6 @@ class Engine:
         self._clients = set()
         self._ports = set()
 
-        # put pending clients in separate fifo list for faster start_all()
-        # and much more ordered start
-        self._pending_clients = []
-
         # keep track of the number of registered clients (delayable only)
         self.reg_clients = 0
 
@@ -398,12 +392,6 @@ class Engine:
         Get a copy of clients set.
         """
         return self._clients.copy()
-
-    def pending_clients(self):
-        """
-        Get a copy of pending clients list.
-        """
-        return copy.copy(self._pending_clients)
 
     def ports(self):
         """
@@ -440,21 +428,17 @@ class Engine:
             # in-fly add if running
             if not client.delayable:
                 self.register(client)
-                return
             elif self.info["fanout"] > self.reg_clients:
                 self.register(client._start())
-                return
-
-        if client.delayable:
-            # add to pending set
-            self._pending_clients.append(client)
 
     def _remove(self, client, abort, did_timeout=False, force=False):
         """
         Remove a client from engine (subroutine).
         """
-        if client.registered:
-            self.unregister(client)
+        # be careful to also remove ports when engine has not started yet
+        if client.registered or not client.delayable:
+            if client.registered:
+                self.unregister(client)
             # care should be taken to ensure correct closing flags
             client._close(abort=abort, flush=not force, timeout=did_timeout)
 
@@ -490,6 +474,7 @@ class Engine:
         Register an engine client. Subclasses that override this method
         should call base class method.
         """
+        assert client in self._clients or client in self._ports
         assert not client.registered
 
         efd = client.fd_error
@@ -627,6 +612,11 @@ class Engine:
         self._debug("SETEV new_events:0x%x events:0x%x %s" % (new_events,
             client._events, client))
 
+        if not client.registered:
+            logging.getLogger(__name__).debug( \
+                "set_events: client %s not registered" % self)
+            return
+
         chgbits = new_events ^ client._events
         if chgbits == 0:
             return
@@ -722,14 +712,16 @@ class Engine:
         # Get current fanout value
         fanout = self.info["fanout"]
         assert fanout > 0
+        if fanout <= self.reg_clients:
+            return
 
         # Register regular engine clients within the fanout limit
-        while self._pending_clients and fanout > self.reg_clients:
-            client = self._pending_clients.pop(0)
-            self._debug("START CLIENT %s" % client.__class__.__name__)
-            # Check if pending client has not been removed since add()
-            if client in self._clients or client in self._ports:
+        for client in self._clients:
+            if not client.registered:
+                self._debug("START CLIENT %s" % client.__class__.__name__)
                 self.register(client._start())
+                if fanout <= self.reg_clients:
+                    break
     
     def run(self, timeout):
         """

@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # ClusterShell test suite
 # Written by S. Thiell 2010-02-18
-# $Id: TaskMsgTreeTest.py 271 2010-06-08 14:29:04Z st-cea $
 
 
 """Unit test for ClusterShell TaskMsgTree variants"""

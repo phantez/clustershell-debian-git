@@ -30,8 +30,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: Utils.py 375 2010-09-28 23:19:15Z st-cea $
 
 """
 CLI utility functions
@@ -43,9 +41,9 @@ import sys
 from ClusterShell.NodeUtils import GroupResolverConfigError
 try:
     from ClusterShell.NodeSet import NodeSet
-except GroupResolverConfigError, e:
+except GroupResolverConfigError, exc:
     print >> sys.stderr, \
-        "ERROR: ClusterShell Groups configuration error:\n\t%s" % e
+        "ERROR: ClusterShell node groups configuration error:\n\t%s" % exc
     sys.exit(1)
 
 
