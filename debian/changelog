@@ -1,11 +1,13 @@
-clustershell (1.5.1-2) unstable; urgency=low
+clustershell (1.6-1) unstable; urgency=low
 
+  * New upstream release 1.6
   * Changed groups.conf to works with mawk. Closes: #638752
+  * Added new folder groups.conf.d and 2 example files and a README
   * Mainstream project has moved from sourceforge to github
     - Changed all the related urls
   * Validated Standards-Version 3.9.3
 
- -- Stephan Gorget <phantez@gmail.com>  Sun, 11 Mar 2012 07:44:10 +0100
+ -- Stéphan Gorget <phantez@gmail.com>  Sat, 14 Apr 2012 00:36:24 +0200
 
 clustershell (1.5.1-1) unstable; urgency=low
 

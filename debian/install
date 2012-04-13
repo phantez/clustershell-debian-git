@@ -4,3 +4,6 @@ doc/extras/vim/ftdetect/clustershell.vim usr/share/vim/addons/ftdetect
 doc/extras/vim/syntax/clushconf.vim usr/share/vim/addons/syntax
 doc/extras/vim/syntax/groupsconf.vim usr/share/vim/addons/syntax
 debian/clustershell.yaml usr/share/vim/registry
+conf/groups.conf.d/README etc/clustershell/groups.conf.d
+conf/groups.conf.d/genders.conf.example etc/clustershell/groups.conf.d
+conf/groups.conf.d/slurm.conf.example etc/clustershell/groups.conf.d
