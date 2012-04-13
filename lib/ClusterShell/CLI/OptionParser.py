@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2010, 2011)
+# Copyright CEA/DAM/DIF (2010, 2011, 2012)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -30,8 +30,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: OptionParser.py 507 2011-06-07 22:33:01Z st-cea $
 
 """
 common ClusterShell CLI OptionParser
@@ -45,7 +43,7 @@ import optparse
 
 from ClusterShell import __version__
 from ClusterShell.Engine.Factory import PreferredEngine
-from ClusterShell.CLI.Display import WHENCOLOR_CHOICES
+from ClusterShell.CLI.Display import THREE_CHOICES
 
 def check_safestring(option, opt, value):
     """type-checker function for safestring"""
@@ -90,18 +88,20 @@ class OptionParser(optparse.OptionParser):
         optgrp.add_option("-w", action="append", type="safestring",
                           dest="nodes", help="nodes where to run the command")
         optgrp.add_option("-x", action="append", type="safestring",
-                          dest="exclude", help="exclude nodes from the node " \
-                          "list")
+                          dest="exclude", metavar="NODES",
+                          help="exclude nodes from the node list")
         optgrp.add_option("-a", "--all", action="store_true", dest="nodes_all",
                           help="run command on all nodes")
         optgrp.add_option("-g", "--group", action="append", type="safestring",
                           dest="group", help="run command on a group of nodes")
         optgrp.add_option("-X", action="append", dest="exgroup",
-                          type="safestring", help="exclude nodes from this " \
-                          "group")
+                          metavar="GROUP", type="safestring",
+                          help="exclude nodes from this group")
         optgrp.add_option("-E", "--engine", action="store", dest="engine",
                           choices=["auto"] + PreferredEngine.engines.keys(),
                           default="auto", help=optparse.SUPPRESS_HELP)
+        optgrp.add_option("-T", "--topology", action="store", dest="topofile",
+                          default=None, help=optparse.SUPPRESS_HELP)
         self.add_option_group(optgrp)
 
     def install_display_options(self,
@@ -150,17 +150,23 @@ class OptionParser(optparse.OptionParser):
                               help="return the largest of command return codes")
 
         if msgtree_mode:
+            # clubak specific
             optgrp.add_option("-F", "--fast", action="store_true",
                               dest="fast_mode",
                               help="faster but memory hungry mode")
             optgrp.add_option("-T", "--tree", action="store_true",
                               dest="trace_mode",
                               help="message tree trace mode")
+            optgrp.add_option("--interpret-keys", action="store",
+                              dest="interpret_keys", choices=THREE_CHOICES,
+                              default=THREE_CHOICES[-1], help="whether to " \
+                              "interpret keys (never, always or auto)")
 
         optgrp.add_option("--color", action="store", dest="whencolor",
-                          choices=WHENCOLOR_CHOICES,
-                          help="whether to use ANSI colors (never, always " \
-                               "or auto)")
+                          choices=THREE_CHOICES, help="whether to use ANSI " \
+                          "colors (never, always or auto)")
+        optgrp.add_option("--diff", action="store_true", dest="diff",
+                          help="show diff between gathered outputs")
         self.add_option_group(optgrp)
 
     def _copy_callback(self, option, opt_str, value, parser):
@@ -188,9 +194,12 @@ class OptionParser(optparse.OptionParser):
     
     def install_ssh_options(self):
         """Install engine/connector (ssh) options"""
-        optgrp = optparse.OptionGroup(self, "Ssh options")
+        optgrp = optparse.OptionGroup(self, "Ssh/Tree options")
         optgrp.add_option("-f", "--fanout", action="store", dest="fanout", 
                           help="use a specified fanout", type="int")
+        #help="queueing delay for traffic grooming"
+        optgrp.add_option("-Q", action="store", dest="grooming_delay", 
+                          help=optparse.SUPPRESS_HELP, type="float")
         optgrp.add_option("-l", "--user", action="store", type="safestring",
                           dest="user", help="execute remote command as user")
         optgrp.add_option("-o", "--options", action="store", dest="options",
@@ -268,7 +277,10 @@ class OptionParser(optparse.OptionParser):
                           help="return sliced off result", type="string")
         optgrp.add_option("--split", action="store", dest="maxsplit", 
                           help="split result into a number of subsets",
-                          type="int", default=1)
+                          type="int")
+        optgrp.add_option("--contiguous", action="store_true",
+                          dest="contiguous", help="split result into " \
+                          "contiguous subsets")
         self.add_option_group(optgrp)
 
 

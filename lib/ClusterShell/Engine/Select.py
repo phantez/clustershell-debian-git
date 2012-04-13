@@ -32,8 +32,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: Select.py 500 2011-05-29 16:18:05Z st-cea $
 
 """
 A select() based ClusterShell Engine.

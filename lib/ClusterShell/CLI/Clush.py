@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010, 2011)
+# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010, 2011, 2012)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -30,8 +30,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: Clush.py 497 2011-05-15 20:18:23Z st-cea $
 
 """
 execute cluster commands in parallel
@@ -47,6 +45,7 @@ When no command are specified, clush runs interactively.
 """
 
 import errno
+import logging
 import os
 import resource
 import sys
@@ -62,7 +61,7 @@ from ClusterShell.CLI.Utils import NodeSet, bufnodeset_cmp
 
 from ClusterShell.Event import EventHandler
 from ClusterShell.MsgTree import MsgTree
-from ClusterShell.NodeSet import NOGROUP_RESOLVER, STD_GROUP_RESOLVER
+from ClusterShell.NodeSet import RESOLVER_NOGROUP, RESOLVER_STD_GROUP
 from ClusterShell.NodeSet import NodeSetParseError
 from ClusterShell.Task import Task, task_self
 
@@ -148,7 +147,7 @@ class DirectOutputHandler(OutputHandler):
 
     def ev_timeout(self, worker):
         self._display.vprint_err(VERB_QUIET, "clush: %s: command timeout" % \
-            NodeSet.fromlist(worker.iter_keys_timeout()))
+            NodeSet._fromlist1(worker.iter_keys_timeout()))
 
     def ev_close(self, worker):
         self.update_prompt(worker)
@@ -200,9 +199,9 @@ class GatherOutputHandler(OutputHandler):
         self._runtimer_finalize(worker)
         assert worker.current_node is not None, "cannot gather local command"
         # Display command output, try to order buffers by rc
-        nodesetify = lambda v: (v[0], NodeSet.fromlist(v[1]))
+        nodesetify = lambda v: (v[0], NodeSet._fromlist1(v[1]))
         cleaned = False
-        for rc, nodelist in worker.iter_retcodes():
+        for rc, nodelist in sorted(worker.iter_retcodes()):
             # Then order by node/nodeset (see bufnodeset_cmp)
             for buf, nodeset in sorted(map(nodesetify,
                                            worker.iter_buffers(nodelist)),
@@ -212,6 +211,7 @@ class GatherOutputHandler(OutputHandler):
                     self._runtimer_clean()
                     cleaned = True
                 self._display.print_gather(nodeset, buf)
+        self._display.flush()
 
         self._close_common(worker)
 
@@ -225,14 +225,14 @@ class GatherOutputHandler(OutputHandler):
         # Display return code if not ok ( != 0)
         for rc, nodelist in worker.iter_retcodes():
             if rc != 0:
-                ns = NodeSet.fromlist(nodelist)
+                ns = NodeSet._fromlist1(nodelist)
                 self._display.vprint_err(verbexit, \
                     "clush: %s: exited with exit code %d" % (ns, rc))
 
         # Display nodes that didn't answer within command timeout delay
         if worker.num_timeout() > 0:
             self._display.vprint_err(verbexit, "clush: %s: command timeout" % \
-                NodeSet.fromlist(worker.iter_keys_timeout()))
+                NodeSet._fromlist1(worker.iter_keys_timeout()))
 
 class LiveGatherOutputHandler(GatherOutputHandler):
     """Live line-gathered output event handler class."""
@@ -361,7 +361,6 @@ def ttyloop(task, nodeset, timeout, display):
     """Manage the interactive prompt to run command"""
     readline_avail = False
     if task.default("USER_interactive"):
-        assert sys.stdin.isatty()
         try:
             import readline
             readline_setup()
@@ -409,7 +408,7 @@ def ttyloop(task, nodeset, timeout, display):
                 print_warn = False
 
                 # Display command output, but cannot order buffers by rc
-                nodesetify = lambda v: (v[0], NodeSet.fromlist(v[1]))
+                nodesetify = lambda v: (v[0], NodeSet._fromlist1(v[1]))
                 for buf, nodeset in sorted(map(nodesetify, task.iter_buffers()),
                                             cmp=bufnodeset_cmp):
                     if not print_warn:
@@ -424,10 +423,10 @@ def ttyloop(task, nodeset, timeout, display):
                     verbexit = VERB_STD
                 ns_ok = NodeSet()
                 for rc, nodelist in task.iter_retcodes():
-                    ns_ok.add(NodeSet.fromlist(nodelist))
+                    ns_ok.add(NodeSet._fromlist1(nodelist))
                     if rc != 0:
                         # Display return code if not ok ( != 0)
-                        ns = NodeSet.fromlist(nodelist)
+                        ns = NodeSet._fromlist1(nodelist)
                         display.vprint_err(verbexit, \
                             "clush: %s: exited with exit code %s" % (ns, rc))
                 # Add uncompleted nodeset to exception object
@@ -437,14 +436,16 @@ def ttyloop(task, nodeset, timeout, display):
                 if task.num_timeout() > 0:
                     display.vprint_err(verbexit, \
                         "clush: %s: command timeout" % \
-                            NodeSet.fromlist(task.iter_keys_timeout()))
+                            NodeSet._fromlist1(task.iter_keys_timeout()))
             raise kbe
 
         if task.default("USER_running"):
-            ns_reg = NodeSet.fromlist([c.key for c in task._engine.clients()])
-            ns_unreg = NodeSet.fromlist([c.key for c in \
-                                         task._engine.pending_clients()])
-            ns_reg -= ns_unreg
+            ns_reg, ns_unreg = NodeSet(), NodeSet()
+            for c in task._engine.clients():
+                if c.registered:
+                    ns_reg.add(c.key)
+                else:
+                    ns_unreg.add(c.key)
             if ns_unreg:
                 pending = "\nclush: pending(%d): %s" % (len(ns_unreg), ns_unreg)
             else:
@@ -470,6 +471,8 @@ def ttyloop(task, nodeset, timeout, display):
                     else:
                         display.vprint(VERB_STD, \
                             "Switching to standard output format")
+                    task.set_default("stdout_msgtree", \
+                                     display.gather or display.line_mode)
                     ns_info = False
                     continue
                 elif not cmdl.startswith('?'): # if ?, just print ns_info
@@ -527,6 +530,11 @@ def run_command(task, cmd, ns, timeout, display):
     results in a dshbak way when gathering is used.
     """    
     task.set_default("USER_running", True)
+
+    if display.verbosity >= VERB_VERB and task.topology:
+        print Display.COLOR_RESULT_FMT % '-' * 15
+        print Display.COLOR_RESULT_FMT % task.topology,
+        print Display.COLOR_RESULT_FMT % '-' * 15
 
     if (display.gather or display.line_mode) and ns is not None:
         if display.gather and display.line_mode:
@@ -607,7 +615,7 @@ def set_fdlimit(fd_max, display):
         resource.setrlimit(resource.RLIMIT_NOFILE, (rlim_max, hard))
 
 def clush_exit(status):
-    # Flush stdio buffers
+    """Flush stdio buffers and exit script."""
     for stream in [sys.stdout, sys.stderr]:
         stream.flush()
     # Use os._exit to avoid threads cleanup
@@ -642,7 +650,7 @@ def clush_excepthook(extype, value, traceback):
     # Error not handled
     task_self().default_excepthook(extype, value, traceback)
 
-def main(args=sys.argv):
+def main():
     """clush script entry point"""
     sys.excepthook = clush_excepthook
 
@@ -664,7 +672,7 @@ def main(args=sys.argv):
     parser.install_filecopy_options()
     parser.install_ssh_options()
 
-    (options, args) = parser.parse_args(args[1:])
+    (options, args) = parser.parse_args()
 
     #
     # Load config file and apply overrides
@@ -678,8 +686,11 @@ def main(args=sys.argv):
     else:
         color = config.color == "always"
 
-    # Create and configure display object.
-    display = Display(options, config, color)
+    try:
+        # Create and configure display object.
+        display = Display(options, config, color)
+    except ValueError, exc:
+        parser.error("option mismatch (%s)" % exc)
 
     #
     # Compute the nodeset
@@ -691,16 +702,16 @@ def main(args=sys.argv):
 
     if options.groupsource:
         # Be sure -a/g -s source work as espected.
-        STD_GROUP_RESOLVER.default_sourcename = options.groupsource
+        RESOLVER_STD_GROUP.default_sourcename = options.groupsource
 
     # FIXME: add public API to enforce engine
     Task._std_default['engine'] = options.engine
 
     # Do we have nodes group?
     task = task_self()
-    task.set_info("debug", config.verbosity > 1)
+    task.set_info("debug", config.verbosity >= VERB_DEBUG)
     if config.verbosity == VERB_DEBUG:
-        STD_GROUP_RESOLVER.set_verbosity(1)
+        RESOLVER_STD_GROUP.set_verbosity(1)
     if options.nodes_all:
         all_nodeset = NodeSet.fromall()
         display.vprint(VERB_DEBUG, "Adding nodes from option -a: %s" % \
@@ -709,7 +720,7 @@ def main(args=sys.argv):
 
     if options.group:
         grp_nodeset = NodeSet.fromlist(options.group,
-                                       resolver=NOGROUP_RESOLVER)
+                                       resolver=RESOLVER_NOGROUP)
         for grp in grp_nodeset:
             addingrp = NodeSet("@" + grp)
             display.vprint(VERB_DEBUG, \
@@ -718,7 +729,7 @@ def main(args=sys.argv):
 
     if options.exgroup:
         grp_nodeset = NodeSet.fromlist(options.exgroup,
-                                       resolver=NOGROUP_RESOLVER)
+                                       resolver=RESOLVER_NOGROUP)
         for grp in grp_nodeset:
             removingrp = NodeSet("@" + grp)
             display.vprint(VERB_DEBUG, \
@@ -754,12 +765,13 @@ def main(args=sys.argv):
     if options.nostdin and interactive:
         parser.error("illegal option `--nostdin' in that case")
 
-    user_interaction = False
+    # Force user_interaction if Clush._f_user_interaction for test purposes
+    user_interaction = hasattr(sys.modules[__name__], '_f_user_interaction')
     if not options.nostdin:
         # Try user interaction: check for foreground ttys presence (ouput)
         stdout_isafgtty = sys.stdout.isatty() and \
             os.tcgetpgrp(sys.stdout.fileno()) == os.getpgrp()
-        user_interaction = stdin_isafgtty and stdout_isafgtty
+        user_interaction |= stdin_isafgtty and stdout_isafgtty
     display.vprint(VERB_DEBUG, "User interaction: %s" % user_interaction)
     if user_interaction:
         # Standard input is a terminal and we want to perform some user
@@ -774,12 +786,30 @@ def main(args=sys.argv):
 
     task.excepthook = sys.excepthook
     task.set_default("USER_stdin_worker", not (sys.stdin.isatty() or \
-                                               options.nostdin))
+                                               options.nostdin or \
+                                               user_interaction))
     display.vprint(VERB_DEBUG, "Create STDIN worker: %s" % \
                                task.default("USER_stdin_worker"))
 
-    task.set_info("debug", config.verbosity >= VERB_DEBUG)
+    if config.verbosity >= VERB_DEBUG:
+        task.set_info("debug", True)
+        logging.basicConfig(level=logging.DEBUG)
+        logging.debug("clush: STARTING DEBUG")
+
     task.set_info("fanout", config.fanout)
+
+    if options.topofile:
+        if config.verbosity >= VERB_VERB:
+            print Display.COLOR_RESULT_FMT % \
+                "Enabling TREE MODE (technology preview)"
+        task.set_default("auto_tree", True)
+        task.set_topology(options.topofile)
+
+    if options.grooming_delay:
+        if config.verbosity >= VERB_VERB:
+            print Display.COLOR_RESULT_FMT % ("Grooming delay: %f" % \
+                                              options.grooming_delay)
+        task.set_info("grooming_delay", options.grooming_delay)
 
     if config.ssh_user:
         task.set_info("ssh_user", config.ssh_user)
@@ -798,6 +828,7 @@ def main(args=sys.argv):
 
     # Disable MsgTree buffering if not gathering outputs
     task.set_default("stdout_msgtree", display.gather or display.line_mode)
+
     # Always disable stderr MsgTree buffering
     task.set_default("stderr_msgtree", False)
 
@@ -815,11 +846,11 @@ def main(args=sys.argv):
         parser.error("--[r]copy option requires at least one argument")
     if options.copy:
         if not options.dest_path:
-            options.dest_path = os.path.dirname(args[0])
+            options.dest_path = os.path.dirname(os.path.abspath(args[0]))
         op = "copy sources=%s dest=%s" % (args, options.dest_path)
     elif options.rcopy:
         if not options.dest_path:
-            options.dest_path = os.path.dirname(args[0])
+            options.dest_path = os.path.dirname(os.path.abspath(args[0]))
         op = "rcopy sources=%s dest=%s" % (args, options.dest_path)
     else:
         op = "command=\"%s\"" % ' '.join(args)

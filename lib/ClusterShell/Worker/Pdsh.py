@@ -29,8 +29,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: Pdsh.py 499 2011-05-26 22:28:56Z st-cea $
 
 """
 WorkerPdsh
@@ -270,8 +268,8 @@ class WorkerPdsh(EngineClient, DistantWorker):
                 elif self.mode == 'pdcp':
                     self._on_node_rc(words[1][:-1], errno.ENOENT)
 
-            except Exception, e:
-                print >> sys.stderr, e
+            except Exception, exc:
+                print >> sys.stderr, exc
                 raise EngineClientError()
         else:
             # split pdsh reply "nodename: msg"

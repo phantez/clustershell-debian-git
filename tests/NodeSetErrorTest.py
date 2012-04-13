@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # ClusterShell.NodeSet.NodeSet error handling test suite
 # Written by S. Thiell 2008-09-28
-# $Id: NodeSetErrorTest.py 246 2010-04-07 22:51:33Z st-cea $
 
 
 """Unit test for RangeSet errors"""
@@ -49,6 +48,7 @@ class NodeSetErrorTest(unittest.TestCase):
         self._testNS("nova[004-002]", NodeSetParseRangeError)
         self._testNS("nova[3-59/2,102a]", NodeSetParseRangeError)
         self._testNS("nova[3-59/2,,102]", NodeSetParseRangeError)
+        self._testNS("nova%s" % ("3" * 101), NodeSetParseRangeError)
 
     def testBadUsages(self):
         """test NodeSet other parse errors"""

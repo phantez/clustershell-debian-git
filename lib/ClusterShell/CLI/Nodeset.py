@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2008, 2009, 2010, 2011)
+# Copyright CEA/DAM/DIF (2008, 2009, 2010, 2011, 2012)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -30,8 +30,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: Nodeset.py 503 2011-05-29 21:30:24Z st-cea $
 
 """
 compute advanced nodeset operations
@@ -47,7 +45,7 @@ from ClusterShell.CLI.Error import GENERIC_ERRORS, handle_generic_error
 from ClusterShell.CLI.OptionParser import OptionParser
 from ClusterShell.CLI.Utils import NodeSet  # safe import
 
-from ClusterShell.NodeSet import RangeSet, grouplist, STD_GROUP_RESOLVER
+from ClusterShell.NodeSet import RangeSet, grouplist, RESOLVER_STD_GROUP
 
 
 def process_stdin(xsetop, xsetcls, autostep):
@@ -98,6 +96,41 @@ def compute_nodeset(xset, args, autostep):
 
     return xset
 
+def command_list(options, xset):
+    """List (-l/-ll/-lll) command handler."""
+    list_level = options.list
+    # list groups of some specified nodes?
+    if options.all or xset or \
+        options.and_nodes or options.sub_nodes or options.xor_nodes:
+        # When some node sets are provided as argument, the list command
+        # retrieves node groups these nodes belong to, thanks to the
+        # groups() method (new in 1.6). Note: stdin support is enabled
+        # when the '-' special character is encountered.
+        groups = xset.groups(options.groupsource, options.groupbase)
+        for group, (gnodes, inodes) in groups.iteritems():
+            if list_level == 1:         # -l
+                print group
+            elif list_level == 2:       # -ll
+                print "%s %s" % (group, inodes)
+            else:                       # -lll
+                print "%s %s %d/%d" % (group, inodes, len(inodes), \
+                                       len(gnodes))
+        return
+    # "raw" group list when no argument at all
+    for group in grouplist(options.groupsource):
+        if options.groupsource and not options.groupbase:
+            nsgroup = "@%s:%s" % (options.groupsource, group)
+        else:
+            nsgroup = "@%s" % group
+        if list_level == 1:         # -l
+            print nsgroup
+        else:
+            nodes = NodeSet(nsgroup)
+            if list_level == 2:     # -ll
+                print "%s %s" % (nsgroup, nodes)
+            else:                   # -lll
+                print "%s %s %d" % (nsgroup, nodes, len(nodes))
+
 def nodeset():
     """script subroutine"""
     class_set = NodeSet
@@ -110,7 +143,7 @@ def nodeset():
     (options, args) = parser.parse_args()
 
     if options.debug:
-        STD_GROUP_RESOLVER.set_verbosity(1)
+        RESOLVER_STD_GROUP.set_verbosity(1)
 
     # Check for command presence
     cmdcount = int(options.count) + int(options.expand) + \
@@ -125,37 +158,27 @@ def nodeset():
         class_set = RangeSet
 
     if options.all or options.regroup:
-        assert class_set == NodeSet, "-a/-r only supported in NodeSet mode"
+        if class_set != NodeSet:
+            parser.error("-a/-r only supported in NodeSet mode")
+
+    if options.maxsplit is not None and options.contiguous:
+        parser.error("incompatible splitting options (split, contiguous)")
+
+    if options.maxsplit is None:
+        options.maxsplit = 1
 
     if options.groupsource and not options.quiet and \
        (class_set == RangeSet or options.groupsources):
         print >> sys.stderr, "WARNING: option group source \"%s\" ignored" \
                                 % options.groupsource
 
-    # The list command doesn't need any NodeSet, check for it first.
-    if options.list > 0:
-        list_level = options.list
-        for group in grouplist(options.groupsource):
-            if options.groupsource and not options.groupbase:
-                nsgroup = "@%s:%s" % (options.groupsource, group)
-            else:
-                nsgroup = "@%s" % group
-            if list_level == 1:
-                print nsgroup
-            else:
-                nodes = NodeSet(nsgroup)
-                if list_level == 2:     # -ll ?
-                    print "%s %s" % (nsgroup, nodes)
-                else:                   # -lll ?
-                    print "%s %s %d" % (nsgroup, nodes, len(nodes))
-        return
-    # Also, the groupsources command simply lists group sources.
-    elif options.groupsources:
+    # The groupsources command simply lists group sources.
+    if options.groupsources:
         if options.quiet:
             dispdefault = ""    # don't show (default) if quiet is set
         else:
             dispdefault = " (default)"
-        for src in STD_GROUP_RESOLVER.sources():
+        for src in RESOLVER_STD_GROUP.sources():
             print "%s%s" % (src, dispdefault)
             dispdefault = ""
         return
@@ -163,7 +186,7 @@ def nodeset():
     # We want -s <groupsource> to act as a substition of default groupsource
     # (ie. it's not necessary to prefix group names by this group source).
     if options.groupsource:
-        STD_GROUP_RESOLVER.default_sourcename = options.groupsource
+        RESOLVER_STD_GROUP.default_sourcename = options.groupsource
 
     # Instantiate RangeSet or NodeSet object
     xset = class_set(autostep=options.autostep)
@@ -171,8 +194,9 @@ def nodeset():
     if options.all:
         # Include all nodes from external node groups support.
         xset.update(NodeSet.fromall()) # uses default_sourcename
-    elif not args:
-        # No need to specify '-' to read stdin if no argument at all.
+
+    if not args and not options.all and not options.list:
+        # No need to specify '-' to read stdin in these cases
         process_stdin(xset.update, xset.__class__, options.autostep)
 
     # Apply first operations (before first non-option)
@@ -200,18 +224,22 @@ def nodeset():
     # Finish xset computing from args
     compute_nodeset(xset, args, options.autostep)
 
-    # Interprate special characters (may raise SyntaxError)
+    # The list command has a special handling
+    if options.list > 0:
+        return command_list(options, xset)
+
+    # Interprete special characters (may raise SyntaxError)
     separator = eval('\'%s\'' % options.separator, {"__builtins__":None}, {})
 
     if options.slice_rangeset:
         _xset = class_set()
-        for sli in RangeSet(options.slice_rangeset).slices(False):
+        for sli in RangeSet(options.slice_rangeset).slices():
             _xset.update(xset[sli])
         xset = _xset
 
     # Display result according to command choice
     if options.expand:
-        xsubres = separator.join
+        xsubres = lambda x: separator.join(x.striter())
     elif options.fold:
         xsubres = lambda x: x
     elif options.regroup:
@@ -220,10 +248,14 @@ def nodeset():
     else:
         xsubres = len
 
-    if not xset or options.maxsplit <= 1:
+    if not xset or options.maxsplit <= 1 and not options.contiguous:
         print xsubres(xset)
     else:
-        for xsubset in xset.split(options.maxsplit):
+        if options.contiguous:
+            xiterator = xset.contiguous()
+        else:
+            xiterator = xset.split(options.maxsplit)
+        for xsubset in xiterator:
             print xsubres(xsubset)
 
 def main():
