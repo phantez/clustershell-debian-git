@@ -1,3 +1,10 @@
+clustershell (1.6-2) UNRELEASED; urgency=low
+
+  * Remove Vcs-* fields pointing to upstream repository.
+  * Add Vcs-* fields pointing to Debian packaging.
+
+ -- Jakub Wilk <jwilk@debian.org>  Sun, 05 May 2013 15:37:00 +0200
+
 clustershell (1.6-1) unstable; urgency=low
 
   * New upstream release 1.6
