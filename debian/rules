@@ -8,5 +8,5 @@ get-orig-tarball:
 
 clean:
 	dh $@
-	rm -rf scripts/nodeset scripts/clush scripts/clubak 
+	rm -rf scripts/nodeset scripts/clush scripts/clubak lib/ClusterShell.egg-info
 
