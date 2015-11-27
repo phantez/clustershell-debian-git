@@ -2,6 +2,7 @@ clustershell (1.7-1-1) unstable; urgency=low
 
   * New upstream release 1.7
   * Debian policy 3.9.6, no changes required
+  * Add python-yaml as recommended
 
  -- Stéphan Gorget <phantez@gmail.com>  Fri, 27 Nov 2015 11:14:20 +0100
 

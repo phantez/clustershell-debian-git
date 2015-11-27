@@ -14,6 +14,7 @@ Package: clustershell
 Architecture: all
 Depends: ${misc:Depends}, ${python:Depends}
 Suggests: vim-addon-manager
+Recommends: python-yaml
 Description: Distributed shell that provides an efficient python interface
  Event-based Python library to execute commands on local or distant
  cluster nodes in parallel depending on the selected engine and
