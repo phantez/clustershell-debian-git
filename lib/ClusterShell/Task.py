@@ -1,6 +1,6 @@
 #
-# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010, 2011, 2012)
-#  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
+# Copyright CEA/DAM/DIF (2007-2015)
+#  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #
 # This file is part of the ClusterShell library.
 #
@@ -57,19 +57,21 @@ Simple example of use:
 from itertools import imap
 import logging
 from operator import itemgetter
+import os
 import socket
 import sys
 import threading
 from time import sleep
 import traceback
 
+from ClusterShell.Defaults import config_paths, DEFAULTS
+from ClusterShell.Defaults import _local_workerclass, _distant_workerclass
 from ClusterShell.Engine.Engine import EngineAbortException
 from ClusterShell.Engine.Engine import EngineTimeoutException
 from ClusterShell.Engine.Engine import EngineAlreadyRunningError
 from ClusterShell.Engine.Engine import EngineTimer
 from ClusterShell.Engine.Factory import PreferredEngine
 from ClusterShell.Worker.EngineClient import EnginePort
-from ClusterShell.Worker.Ssh import WorkerSsh
 from ClusterShell.Worker.Popen import WorkerPopen
 from ClusterShell.Worker.Tree import WorkerTree
 
@@ -101,13 +103,6 @@ def _getshorthostname():
     """Get short hostname (host name cut at the first dot)"""
     return socket.gethostname().split('.')[0]
 
-def _task_print_debug(task, s):
-    """
-    Default task debug printing function. Cannot provide 'print'
-    directly as it is not a function (will be in Py3k!).
-    """
-    print s
-
 
 class Task(object):
     """
@@ -122,19 +117,24 @@ class Task(object):
     singleton". So most of the time, and even more for single-threaded
     applications, you can get the current task object with the following
     top-level Task module function:
+
         >>> task = task_self()
 
     However, if you want to create a task in a new thread, use:
+
         >>> task = Task()
 
     To create or get the instance of the task associated with the thread
     object thr (threading.Thread):
+
         >>> task = Task(thread=thr)
 
     To submit a command to execute locally within task, use:
+
         >>> task.shell("/bin/hostname")
 
     To submit a command to execute to some distant nodes in parallel, use:
+
         >>> task.shell("/bin/hostname", nodes="tiger[1-20]")
 
     The previous examples submit commands to execute but do not allow result
@@ -143,16 +143,20 @@ class Task(object):
     local or remote events. These handlers are based on the EventHandler
     class, defined in ClusterShell.Event. The following example shows how to
     submit a command on a cluster with a registered event handler:
+
         >>> task.shell("uname -r", nodes="node[1-9]", handler=MyEventHandler())
 
     Run task in its associated thread (will block only if the calling thread is
     the task associated thread):
+
         >>> task.resume()
-    or
+    or:
+
         >>> task.run()
 
     You can also pass arguments to task.run() to schedule a command exactly
     like in task.shell(), and run it:
+
         >>> task.run("hostname", nodes="tiger[1-20]", handler=MyEventHandler())
 
     A common need is to set a maximum delay for command execution, especially
@@ -160,6 +164,7 @@ class Task(object):
     very straighforward. To limit the execution time on each node, use the
     timeout parameter of shell() or run() methods to set a delay in seconds,
     like:
+
         >>> task.run("check_network.sh", nodes="tiger[1-20]", timeout=30)
 
     You can then either use Task's iter_keys_timeout() method after execution
@@ -176,20 +181,10 @@ class Task(object):
     node_retcode() and max_retcode() methods after command execution, or
     listen for ev_hup() events in your event handler.
     """
-    _std_default = {  "stderr"             : False,
-                      "stdout_msgtree"     : True,
-                      "stderr_msgtree"     : True,
-                      "engine"             : 'auto',
-                      "port_qlimit"        : 100,
-                      "auto_tree"          : False,
-                      "topology_file"      : "/etc/clustershell/topology.conf" }
 
-    _std_info =     { "debug"              : False,
-                      "print_debug"        : _task_print_debug,
-                      "fanout"             : 64,
-                      "grooming_delay"     : 0.25,
-                      "connect_timeout"    : 10,
-                      "command_timeout"    : 0 }
+    # topology.conf file path list
+    TOPOLOGY_CONFIGS = config_paths('topology.conf')
+
     _tasks = {}
     _taskid_max = 0
     _task_lock = threading.Lock()
@@ -209,7 +204,6 @@ class Task(object):
         """Class encapsulating a function that checks if the calling
         task is running or is the current task, and allowing it to be
         used as a decorator making the wrapped task method thread-safe."""
-        
         def __call__(self, f):
             def taskfunc(*args, **kwargs):
                 # pull out the class instance
@@ -218,7 +212,7 @@ class Task(object):
                 if task._is_task_self():
                     return f(task, *fargs, **kwargs)
                 elif task._dispatch_port:
-                    # no, safely call the task method by message 
+                    # no, safely call the task method by message
                     # through the task special dispatch port
                     task._dispatch_port.msg_send((f, fargs, kwargs))
                 else:
@@ -261,7 +255,7 @@ class Task(object):
                     self._cond.wait()
             finally:
                 self._cond.release()
-            
+
         def notify_all(self):
             """Signal all threads waiting for condition."""
             self._cond.acquire()
@@ -272,7 +266,7 @@ class Task(object):
                 self._cond.release()
 
 
-    def __new__(cls, thread=None):
+    def __new__(cls, thread=None, defaults=None):
         """
         For task bound to a specific thread, this class acts like a
         "thread singleton", so new style class is used and new object
@@ -285,20 +279,24 @@ class Task(object):
 
         return object.__new__(cls)
 
-    def __init__(self, thread=None):
-        """
-        Initialize a Task, creating a new thread if needed.
-        """
+    def __init__(self, thread=None, defaults=None):
+        """Initialize a Task, creating a new non-daemonic thread if
+        needed."""
         if not getattr(self, "_engine", None):
             # first time called
             self._default_lock = threading.Lock()
-            self._default = self.__class__._std_default.copy()
-            self._info = self.__class__._std_info.copy()
+            if defaults is None:
+                defaults = DEFAULTS
+            self._default = defaults._task_default.copy()
+            self._default.update(
+                {"local_worker": _local_workerclass(defaults),
+                 "distant_worker": _distant_workerclass(defaults)})
+            self._info = defaults._task_info.copy()
 
             # use factory class PreferredEngine that gives the proper
             # engine instance
             self._engine = PreferredEngine(self.default("engine"), self._info)
-            self.timeout = 0
+            self.timeout = None
 
             # task synchronization objects
             self._run_lock = threading.Lock()       # primitive lock
@@ -308,23 +306,21 @@ class Task(object):
             self._join_cond = threading.Condition(self._suspend_lock)
             self._suspended = False
             self._quit = False
+            self._terminated = False
 
             # Default router
             self.topology = None
             self.router = None
-            self.pwrks = {}
-            self.pmwkrs = {}
+            self.gateways = {}
 
-            # STDIN tree
-            self._msgtree = None
-            # STDERR tree
-            self._errtree = None
+            # dict of MsgTree by sname
+            self._msgtrees = {}
             # dict of sources to return codes
             self._d_source_rc = {}
             # dict of return codes to sources
             self._d_rc_sources = {}
             # keep max rc
-            self._max_rc = 0
+            self._max_rc = None
             # keep timeout'd sources
             self._timeout_sources = set()
             # allow no-op call to getters before resume()
@@ -385,12 +381,12 @@ class Task(object):
     # arguments method (very similar of what you can do with
     # sys.excepthook)."""
     excepthook = property(_getexcepthook, _setexcepthook)
-        
+
     def _thread_start(self):
         """Task-managed thread entry point"""
         while not self._quit:
             self._suspend_cond.wait_check()
-            if self._quit:
+            if self._quit:  # may be set by abort()
                 break
             try:
                 self._resume()
@@ -412,27 +408,30 @@ class Task(object):
         finally:
             self._run_lock.release()
 
-    def set_topology(self, topology_file):
-        """Set new propagation topology from provided file."""
-        self.set_default("topology_file", topology_file)
-        self.topology = self._default_topology()
+    def _default_tree_is_enabled(self):
+        """Return whether default tree is enabled (load topology_file btw)"""
+        if self.topology is None:
+            for topology_file in self.TOPOLOGY_CONFIGS[::-1]:
+                if os.path.exists(topology_file):
+                    self.load_topology(topology_file)
+                    break
+        return (self.topology is not None) and self.default("auto_tree")
 
-    def _default_topology(self):
-        try:
-            parser = TopologyParser()
-            parser.load(self.default("topology_file"))
-            return parser.tree(_getshorthostname())
-        except TopologyError, exc:
-            logging.getLogger(__name__).exception("_default_topology(): %s", \
-                                                  str(exc))
-            raise
-        return None
+    def load_topology(self, topology_file):
+        """Load propagation topology from provided file.
+
+        On success, task.topology is set to a corresponding TopologyTree
+        instance.
+
+        On failure, task.topology is left untouched and a TopologyError
+        exception is raised.
+        """
+        self.topology = TopologyParser(topology_file).tree(_getshorthostname())
 
     def _default_router(self):
         if self.router is None:
-            topology = self.topology
-            self.router = PropagationTreeRouter(str(topology.root.nodeset), \
-                                                topology)
+            self.router = PropagationTreeRouter(str(self.topology.root.nodeset),
+                                                self.topology)
         return self.router
 
     def default(self, default_key, def_val=None):
@@ -451,18 +450,20 @@ class Task(object):
         Set task value for specified key in the dictionary "default".
         Users may store their own task-specific key, value pairs
         using this method and retrieve them with default().
-        
+
         Task default_keys are:
           - "stderr": Boolean value indicating whether to enable
             stdout/stderr separation when using task.shell(), if not
             specified explicitly (default: False).
-          - "stdout_msgtree": Whether to enable standard output MsgTree
-            for automatic internal gathering of result messages
-            (default: True).
+          - "stdout_msgtree": Whether to instantiate standard output
+            MsgTree for automatic internal gathering of result messages
+            coming from Workers (default: True).
           - "stderr_msgtree": Same for stderr (default: True).
           - "engine": Used to specify an underlying Engine explicitly
             (default: "auto").
           - "port_qlimit": Size of port messages queue (default: 32).
+          - "worker": Worker-based class used when spawning workers through
+            shell()/run().
 
         Threading considerations
         ========================
@@ -491,7 +492,7 @@ class Task(object):
         pairs can be passed to the engine and/or workers.
         Users may store their own task-specific info key, value pairs
         using this method and retrieve them with info().
-        
+
         The following example changes the fanout value to 128:
             >>> task.set_info('fanout', 128)
 
@@ -556,7 +557,8 @@ class Task(object):
         Distant usage::
             task.shell(command, nodes=nodeset [, handler=handler]
                   [, timeout=secs], [, autoclose=enable_autoclose]
-                  [, strderr=enable_stderr], [tree=None|False|True])
+                  [, tree=None|False|True] [, remote=False|True]
+                  [, stderr=enable_stderr])
 
         Example:
 
@@ -569,29 +571,34 @@ class Task(object):
         timeo = kwargs.get("timeout", None)
         autoclose = kwargs.get("autoclose", False)
         stderr = kwargs.get("stderr", self.default("stderr"))
+        remote = kwargs.get("remote", True)
 
         if kwargs.get("nodes", None):
             assert kwargs.get("key", None) is None, \
                     "'key' argument not supported for distant command"
 
             tree = kwargs.get("tree")
-            if tree and self.topology is None:
-                raise TaskError("tree mode required for distant shell command" \
-                                " with unknown topology!")
-            if tree is None: # means auto
-                tree = self.default("auto_tree") and (self.topology is not None)
-            if tree:
-                # create tree of ssh worker
-                worker = WorkerTree(NodeSet(kwargs["nodes"]), command=command,
-                                    handler=handler, stderr=stderr,
-                                    timeout=timeo, autoclose=autoclose)
+
+            # tree == None means auto
+            if tree != False and self._default_tree_is_enabled():
+                # fail if tree is forced without any topology
+                if tree and self.topology is None:
+                    raise TaskError("tree mode required for distant shell "
+                                    "command with unknown topology!")
+                # create tree worker
+                wrkcls = WorkerTree
+            elif not remote:
+                # create local worker
+                wrkcls = self.default('local_worker')
             else:
-                # create ssh-based worker
-                worker = WorkerSsh(NodeSet(kwargs["nodes"]), command=command,
-                                   handler=handler, stderr=stderr,
-                                   timeout=timeo, autoclose=autoclose)
+                # create distant worker
+                wrkcls = self.default('distant_worker')
+
+            worker = wrkcls(NodeSet(kwargs["nodes"]), command=command,
+                            handler=handler, stderr=stderr,
+                            timeout=timeo, autoclose=autoclose, remote=remote)
         else:
-            # create (local) worker
+            # create old fashioned local worker
             worker = WorkerPopen(command, key=kwargs.get("key", None),
                                  handler=handler, stderr=stderr,
                                  timeout=timeo, autoclose=autoclose)
@@ -613,10 +620,24 @@ class Task(object):
         preserve = kwargs.get("preserve", None)
         reverse = kwargs.get("reverse", False)
 
-        # create a new copy worker
-        worker = WorkerSsh(nodes, source=source, dest=dest, handler=handler,
-                           stderr=stderr, timeout=timeo, preserve=preserve,
-                           reverse=reverse)
+        tree = kwargs.get("tree")
+
+        # tree == None means auto
+        if tree != False and self._default_tree_is_enabled():
+            # fail if tree is forced without any topology
+            if tree and self.topology is None:
+                raise TaskError("tree mode required for distant shell "
+                                "command with unknown topology!")
+
+            # create tree worker
+            wrkcls = WorkerTree
+        else:
+            # create a new copy worker
+            wrkcls = self.default('distant_worker')
+
+        worker = wrkcls(nodes, source=source, dest=dest, handler=handler,
+                        stderr=stderr, timeout=timeo, preserve=preserve,
+                        reverse=reverse)
 
         self.schedule(worker)
         return worker
@@ -670,7 +691,7 @@ class Task(object):
         can also have their next firing time manually adjusted.
 
         The mandatory parameter `fire' sets the firing delay in seconds.
-        
+
         The optional parameter `interval' sets the firing interval of
         the timer. If not specified, the timer fires once and then is
         automatically invalidated.
@@ -691,7 +712,7 @@ class Task(object):
         """
         assert fire >= 0.0, \
             "timer's relative fire time must be a positive floating number"
-        
+
         timer = EngineTimer(fire, interval, autoclose, handler)
         # The following method may be sent through msg port (async
         # call) if called from another task.
@@ -718,7 +739,8 @@ class Task(object):
         >>> task.schedule(worker)
         >>> task.resume()
         """
-        assert self in Task._tasks.values(), "deleted task"
+        assert self in Task._tasks.values(), \
+            "deleted task instance, call task_self() again!"
 
         # bind worker to task self
         worker._set_task(self)
@@ -747,11 +769,11 @@ class Task(object):
         finally:
             # task becomes joinable
             self._join_cond.acquire()
-            self._suspend_cond.suspend_count += 1
+            self._suspend_cond.atomic_inc()
             self._join_cond.notifyAll()
             self._join_cond.release()
 
-    def resume(self, timeout=0):
+    def resume(self, timeout=None):
         """
         Resume task. If task is task_self(), workers are executed in the
         calling thread so this method will block until all (non-autoclosing)
@@ -786,7 +808,7 @@ class Task(object):
 
         >>> task.run("hostname", nodes="foo")
 
-        Without argument, it starts all outstanding actions. 
+        Without argument, it starts all outstanding actions.
         It behaves like Task.resume().
 
         >>> task.shell("hostname", nodes="foo")
@@ -803,7 +825,7 @@ class Task(object):
         exception is raised if this delay is reached.
         """
         worker = None
-        timeout = 0
+        timeout = None
 
         # Both resume() and shell() support a 'timeout' parameter. We need a
         # trick to behave correctly for both cases.
@@ -840,7 +862,7 @@ class Task(object):
         self._suspend_lock.acquire()
         self._suspended = False
         self._suspend_lock.release()
-            
+
     def suspend(self):
         """
         Suspend task execution. This method may be called from another
@@ -857,7 +879,7 @@ class Task(object):
 
         # wait for stopped task
         self._run_lock.acquire()    # run_lock ownership transfer
-        
+
         # get result: are we really suspended or just stopped?
         result = True
         self._suspend_lock.acquire()
@@ -873,6 +895,7 @@ class Task(object):
         """Abort request received."""
         assert task_self() == self
         # raise an EngineAbortException when task is running
+        self._quit = True
         self._engine.abort(kill)
 
     def abort(self, kill=False):
@@ -882,30 +905,47 @@ class Task(object):
         object is unbound from the current thread, so calling
         task_self() creates a new Task object.
         """
-        if self._run_lock.acquire(0):
-            self._quit = True
-            self._run_lock.release()
-            if self._is_task_self():
-                self._terminate(kill)
-            else:
-                # abort on stopped/suspended task
-                self.resume()
-        else:
-            # self._run_lock is locked, call synchronized method
+        if not self._run_lock.acquire(0):
+            # self._run_lock is locked, try to call synchronized method
             self._abort(kill)
+            # but there is no guarantee that it has really been called, as the
+            # task could have aborted during the same time, so we use polling
+            while not self._run_lock.acquire(0):
+                sleep(0.001)
+        # in any case, once _run_lock has been acquired, confirm abort
+        self._quit = True
+        self._run_lock.release()
+        if self._is_task_self():
+            self._terminate(kill)
+        else:
+            # abort on stopped/suspended task
+            self._suspend_cond.notify_all()
 
     def _terminate(self, kill):
         """
         Abort completion subroutine.
         """
+        assert self._quit == True
+        self._terminated = True
+
         if kill:
             # invalidate dispatch port
             self._dispatch_port = None
         # clear engine
         self._engine.clear(clear_ports=kill)
+        if kill:
+            self._engine.release()
+            self._engine = None
 
         # clear result objects
         self._reset()
+
+        # unlock any remaining threads that are waiting for our
+        # termination (late join()s)
+        # must be called after _terminated is set to True
+        self._join_cond.acquire()
+        self._join_cond.notifyAll()
+        self._join_cond.release()
 
         # destroy task if needed
         if kill:
@@ -922,10 +962,12 @@ class Task(object):
         """
         self._join_cond.acquire()
         try:
-            if self._suspend_cond.suspend_count > 0:
-                if not self._suspended:
-                    # ignore stopped task
-                    return
+            if self._suspend_cond.suspend_count > 0 and not self._suspended:
+                # ignore stopped task
+                return
+            if self._terminated:
+                # ignore join() on dead task
+                return
             self._join_cond.wait()
         finally:
             self._join_cond.release()
@@ -934,100 +976,85 @@ class Task(object):
         """
         Return True if the task is running.
         """
-        return self._engine.running
+        return self._engine and self._engine.running
 
     def _reset(self):
         """
         Reset buffers and retcodes management variables.
         """
-        # check and reset stdout MsgTree
-        if self.default("stdout_msgtree"):
-            if not self._msgtree:
-                self._msgtree = MsgTree()
-            self._msgtree.clear()
-        else:
-            self._msgtree = None
-        # check and reset stderr MsgTree
-        if self.default("stderr_msgtree"):
-            if not self._errtree:
-                self._errtree = MsgTree()
-            self._errtree.clear()
-        else:
-            self._errtree = None
+        # reinit MsgTree dict
+        self._msgtrees = {}
         # other re-init's
         self._d_source_rc = {}
         self._d_rc_sources = {}
-        self._max_rc = 0
+        self._max_rc = None
         self._timeout_sources.clear()
 
-    def _msg_add(self, source, msg):
+    def _msgtree(self, sname, strict=True):
+        """Helper method to return msgtree instance by sname if allowed."""
+        if self.default("%s_msgtree" % sname):
+            if sname not in self._msgtrees:
+                self._msgtrees[sname] = MsgTree()
+            return self._msgtrees[sname]
+        elif strict:
+            raise TaskMsgTreeError("%s_msgtree not set" % sname)
+
+    def _msg_add(self, worker, node, sname, msg):
         """
-        Add a worker message associated with a source.
+        Process a new message into Task's MsgTree that is coming from:
+            - a worker instance of this task
+            - a node
+            - a stream name sname (string identifier)
         """
-        msgtree = self._msgtree
+        assert worker.task == self, "better to add messages from my workers"
+        msgtree = self._msgtree(sname, strict=False)
+        # As strict=False, if msgtree is None, this means task is set to NOT
+        # record messages... in that case we ignore this request, still
+        # keeping possible existing MsgTree, thus allowing temporarily
+        # disabled ones.
         if msgtree is not None:
-            msgtree.add(source, msg)
+            msgtree.add((worker, node), msg)
 
-    def _errmsg_add(self, source, msg):
+    def _rc_set(self, worker, node, rc):
         """
-        Add a worker error message associated with a source.
+        Add a worker return code (rc) that is coming from a node of a
+        worker instance.
         """
-        errtree = self._errtree
-        if errtree is not None:
-            errtree.add(source, msg)
-
-    def _rc_set(self, source, rc, override=True):
-        """
-        Add a worker return code associated with a source.
-        """
-        if not override and self._d_source_rc.has_key(source):
-            return
+        source = (worker, node)
 
         # store rc by source
         self._d_source_rc[source] = rc
 
         # store source by rc
         self._d_rc_sources.setdefault(rc, set()).add(source)
-        
+
         # update max rc
-        if rc > self._max_rc:
+        if self._max_rc is None or rc > self._max_rc:
             self._max_rc = rc
 
-    def _timeout_add(self, source):
+    def _timeout_add(self, worker, node):
         """
-        Add a worker timeout associated with a source.
+        Add a timeout indicator that is coming from a node of a worker
+        instance.
         """
         # store source in timeout set
-        self._timeout_sources.add(source)
+        self._timeout_sources.add((worker, node))
 
-    def _msg_by_source(self, source):
-        """
-        Get a message by its source (worker, key).
-        """
-        if self._msgtree is None:
-            raise TaskMsgTreeError("stdout_msgtree not set")
-        s = self._msgtree.get(source)
-        if s is None:
+    def _msg_by_source(self, worker, node, sname):
+        """Get a message by its worker instance, node and stream name."""
+        msg = self._msgtree(sname).get((worker, node))
+        if msg is None:
             return None
-        return str(s)
-
-    def _errmsg_by_source(self, source):
-        """
-        Get an error message by its source (worker, key).
-        """
-        if self._errtree is None:
-            raise TaskMsgTreeError("stderr_msgtree not set")
-        s = self._errtree.get(source)
-        if s is None:
-            return None
-        return str(s)
+        return str(msg)
 
     def _call_tree_matcher(self, tree_match_func, match_keys=None, worker=None):
         """Call identified tree matcher (items, walk) method with options."""
+        if isinstance(match_keys, basestring): # change to str for Python 3
+            raise TypeError("Sequence of keys/nodes expected for 'match_keys'.")
         # filter by worker and optionally by matching keys
-        if worker and not match_keys:
+        if worker and match_keys is None:
             match = lambda k: k[0] is worker
-        elif worker and match_keys:
+        elif worker and match_keys is not None:
             match = lambda k: k[0] is worker and k[1] in match_keys
         elif match_keys:
             match = lambda k: k[1] in match_keys
@@ -1035,13 +1062,11 @@ class Task(object):
             match = None
         # Call tree matcher function (items or walk)
         return tree_match_func(match, itemgetter(1))
-    
-    def _rc_by_source(self, source):
-        """
-        Get a return code by its source (worker, key).
-        """
-        return self._d_source_rc[source]
-   
+
+    def _rc_by_source(self, worker, node):
+        """Get a return code by worker instance and node."""
+        return self._d_source_rc[(worker, node)]
+
     def _rc_iter_by_key(self, key):
         """
         Return an iterator over return codes for the given key.
@@ -1099,15 +1124,17 @@ class Task(object):
         """
         Remove any messages from specified worker.
         """
-        if self._msgtree is not None:
-            self._msgtree.remove(lambda k: k[0] == worker)
+        msgtree = self._msgtree('stdout', strict=False)
+        if msgtree is not None:
+            msgtree.remove(lambda k: k[0] == worker)
 
     def _flush_errors_by_worker(self, worker):
         """
         Remove any error messages from specified worker.
         """
-        if self._errtree is not None:
-            self._errtree.remove(lambda k: k[0] == worker)
+        errtree = self._msgtree('stderr', strict=False)
+        if errtree is not None:
+            errtree.remove(lambda k: k[0] == worker)
 
     def key_buffer(self, key):
         """
@@ -1116,12 +1143,10 @@ class Task(object):
         all workers content that may overlap. This method returns an
         empty buffer if key is not found in any workers.
         """
-        msgtree = self._msgtree
-        if msgtree is None:
-            raise TaskMsgTreeError("stdout_msgtree not set")
+        msgtree = self._msgtree('stdout')
         select_key = lambda k: k[1] == key
         return "".join(imap(str, msgtree.messages(select_key)))
-    
+
     node_buffer = key_buffer
 
     def key_error(self, key):
@@ -1131,12 +1156,10 @@ class Task(object):
         workers content that may overlap. This method returns an empty
         error buffer if key is not found in any workers.
         """
-        errtree = self._errtree
-        if errtree is None:
-            raise TaskMsgTreeError("stderr_msgtree not set")
+        errtree = self._msgtree('stderr')
         select_key = lambda k: k[1] == key
         return "".join(imap(str, errtree.messages(select_key)))
-    
+
     node_error = key_error
 
     def key_retcode(self, key):
@@ -1150,12 +1173,15 @@ class Task(object):
         if not codes:
             raise KeyError(key)
         return max(codes)
-    
+
     node_retcode = key_retcode
 
     def max_retcode(self):
         """
-        Get max return code encountered during last run.
+        Get max return code encountered during last run
+            or None in the following cases:
+                - all commands timed out,
+                - no command was executed.
 
         How retcodes work
         =================
@@ -1164,6 +1190,16 @@ class Task(object):
           code is 128 + signal number.
         """
         return self._max_rc
+
+    def _iter_msgtree(self, sname, match_keys=None):
+        """Helper method to iterate over recorded buffers by sname."""
+        try:
+            msgtree = self._msgtrees[sname]
+            return self._call_tree_matcher(msgtree.walk, match_keys)
+        except KeyError:
+            if not self.default("%s_msgtree" % sname):
+                raise TaskMsgTreeError("%s_msgtree not set" % sname)
+            return iter([])
 
     def iter_buffers(self, match_keys=None):
         """
@@ -1180,10 +1216,7 @@ class Task(object):
         ...     print NodeSet.fromlist(nodelist)
         ...     print buffer
         """
-        msgtree = self._msgtree
-        if msgtree is None:
-            raise TaskMsgTreeError("stdout_msgtree not set")
-        return self._call_tree_matcher(msgtree.walk, match_keys)
+        return self._iter_msgtree('stdout', match_keys)
 
     def iter_errors(self, match_keys=None):
         """
@@ -1191,11 +1224,8 @@ class Task(object):
 
         See iter_buffers().
         """
-        errtree = self._errtree
-        if errtree is None:
-            raise TaskMsgTreeError("stderr_msgtree not set")
-        return self._call_tree_matcher(errtree.walk, match_keys)
-        
+        return self._iter_msgtree('stderr', match_keys)
+
     def iter_retcodes(self, match_keys=None):
         """
         Iterate over return codes, returns a tuple (rc, keys).
@@ -1234,15 +1264,17 @@ class Task(object):
         """
         Flush all task messages (from all task workers).
         """
-        if self._msgtree is not None:
-            self._msgtree.clear()
+        msgtree = self._msgtree('stdout', strict=False)
+        if msgtree is not None:
+            msgtree.clear()
 
     def flush_errors(self):
         """
         Flush all task error messages (from all task workers).
         """
-        if self._errtree is not None:
-            self._errtree.clear()
+        errtree = self._msgtree('stderr', strict=False)
+        if errtree is not None:
+            errtree.clear()
 
     @classmethod
     def wait(cls, from_thread):
@@ -1261,50 +1293,67 @@ class Task(object):
             if thread != from_thread:
                 task.join()
 
-    def pchannel(self, gateway, metaworker): #gw_invoke_cmd):
-        """Get propagation channel for gateway (create one if needed)"""
-        # create channel if needed
-        if gateway not in self.pwrks:
-            chan = PropagationChannel(self)
+    def _pchannel(self, gateway, metaworker):
+        """Get propagation channel for gateway (create one if needed).
+
+        Use self.gateways dictionary that allows lookup like:
+            gateway => (worker channel, set of metaworkers)
+        """
+        # create gateway channel if needed
+        if gateway not in self.gateways:
+            chan = PropagationChannel(self, gateway)
+            logging.getLogger(__name__).info("pchannel: creating new channel")
             # invoke gateway
-            timeout = 0
-            worker = self.shell(metaworker.invoke_gateway, nodes=gateway,
-                                handler=chan, timeout=timeout, tree=False)
-            self.pwrks[gateway] = worker
+            timeout = None # FIXME: handle timeout for gateway channels
+            wrkcls = self.default('distant_worker')
+            chanworker = wrkcls(gateway, command=metaworker.invoke_gateway,
+                                handler=chan, stderr=True, timeout=timeout)
+            # change default stream names to avoid internal task buffering
+            # and conform with channel stream names
+            chanworker.SNAME_STDIN = chan.SNAME_WRITER
+            chanworker.SNAME_STDOUT = chan.SNAME_READER
+            chanworker.SNAME_STDERR = chan.SNAME_ERROR
+            self.schedule(chanworker)
+            # update gateways dict
+            self.gateways[gateway] = (chanworker, set([metaworker]))
         else:
-            worker = self.pwrks[gateway]
-            chan = worker.eh
-        
-        if metaworker not in self.pmwkrs:
-            mw = self.pmwkrs[metaworker] = set()
+            # TODO: assert chanworker is running (need Worker.running())
+            chanworker, metaworkers = self.gateways[gateway]
+            metaworkers.add(metaworker)
+        return chanworker.eh
+
+    def _pchannel_release(self, gateway, metaworker):
+        """Release propagation channel associated to gateway.
+
+        Lookup by gateway, decref associated metaworker set and release
+        channel worker if needed.
+        """
+        logging.getLogger(__name__).info("pchannel_release %s %s", gateway,
+                                         metaworker)
+
+        if gateway not in self.gateways:
+            logging.getLogger(__name__).error("pchannel_release: no pchannel"
+                                              "found for gateway %s",
+                                              gateway)
         else:
-            mw = self.pmwkrs[metaworker]
-        if worker not in mw:
-            #print >>sys.stderr, "pchannel++"
-            worker.metarefcnt += 1
-            mw.add(worker)
-        return chan
+            # TODO: delay gateway closing when other gateways are running
+            chanworker, metaworkers = self.gateways[gateway]
+            metaworkers.remove(metaworker)
+            if len(metaworkers) == 0:
+                logging.getLogger(__name__).info("worker finishing")
+                chanworker.abort()
+                # delete gateway reference
+                del self.gateways[gateway]
 
-    def _pchannel_release(self, metaworker):
-        """Release propagation channel"""
-        if metaworker in self.pmwkrs:
-            for worker in self.pmwkrs[metaworker]:
-                #print >>sys.stderr, "pchannel_release2 %s" % worker
-                worker.metarefcnt -= 1
-                if worker.metarefcnt == 0:
-                    #print >>sys.stderr, "worker abort"
-                    worker.eh._close()
-                    #worker.abort()
-            
 
-def task_self():
+def task_self(defaults=None):
     """
     Return the current Task object, corresponding to the caller's thread of
     control (a Task object is always bound to a specific thread). This function
     provided as a convenience is available in the top-level ClusterShell.Task
     package namespace.
     """
-    return Task(thread=threading.currentThread())
+    return Task(thread=threading.currentThread(), defaults=defaults)
 
 def task_wait():
     """
@@ -1318,9 +1367,9 @@ def task_wait():
 def task_terminate():
     """
     Destroy the Task instance bound to the current thread. A next call to
-    task_self() will create a new Task object. This function provided as a
-    convenience is available in the top-level ClusterShell.Task package
-    namespace.
+    task_self() will create a new Task object. Not to be called from a signal
+    handler. This function provided as a convenience is available in the
+    top-level ClusterShell.Task package namespace.
     """
     task_self().abort(kill=True)
 
@@ -1329,7 +1378,8 @@ def task_cleanup():
     Cleanup routine to destroy all created tasks. This function provided as a
     convenience is available in the top-level ClusterShell.Task package
     namespace. This is mainly used for testing purposes and should be avoided
-    otherwise. task_cleanup() may be called from any threads.
+    otherwise. task_cleanup() may be called from any threads but not from a
+    signal handler.
     """
     # be sure to return to a clean state (no task at all)
     while True:
