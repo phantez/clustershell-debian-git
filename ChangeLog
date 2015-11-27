@@ -1,3 +1,209 @@
+2015-11-10 S. Thiell <sthiell@stanford.edu>
+
+	* Version 1.7 released.
+
+2015-11-01 S. Thiell <sthiell@stanford.edu>
+
+	* Clush.py: added -P/--progress to force display of the live progress
+	indicator and display global write bandwidth when writing standard input.
+
+2015-10-25 S. Thiell <sthiell@stanford.edu>
+
+	* Clush.py: added --option/-O clush.conf settings override (pull
+	request #248).
+
+2015-10-18 S. Thiell <sthiell@stanford.edu>
+
+	* Clush.py: added --hostfile command line option to specify a file
+	containing single hosts, node sets or node groups (ticket #235).
+
+2015-10-16 S. Thiell <sthiell@stanford.edu>
+
+	* NodeSet.py: enhancing parser to recognize nodesets with brackets having
+	leading/trailing digits like in "prod-00[01-99]" (ticket #228).
+
+2015-08-29 S. Thiell <sthiell@stanford.edu>
+
+	* CLI/Nodeset.py: added --axis option to choose nD fold axis (ticket
+	#269).
+	* NodeSet.py: added fold_axis public member to NodeSetBase along with
+	expand algorithm when casting to string to choose nD fold axis (ticket
+	#269).
+
+2015-08-28 S. Thiell <sthiell@stanford.edu>
+
+	* CLI/Config.py: better per-user clush.conf support. clush now also checks
+	for $XDG_CONFIG_HOME/clustershell/clush.conf and
+	$HOME/.local/etc/clustershell/clush.conf (ticket #111).
+
+2015-08-27 S. Thiell <sthiell@stanford.edu>
+
+	* CLI/Nodeset.py: add --list-all / -L to list groups from all group
+	sources (ticket #266). If repeated, it has the same behavior than -l.
+
+	* NodeUtils.py: add support for built-in groups definition files based on
+	YAML. Added autodir configuration option in groups.conf to declare a
+	directory where .yaml files are automatically loaded. Example available in
+	groups.d/cluster.yaml.example. Added support for groups.conf section with
+	multiple source names separated by comma. This is also the case for
+	groups.conf.d/*.conf extensions. Also added new upcall command $SOURCE
+	variable that is replaced by calling source name before execution.
+	Finally, /etc/clustershell/groups is now deprecated and replaced by
+	/etc/clustershell/groups.d/local.cfg for new installation (ticket #258).
+
+2015-07-07 S. Thiell <sthiell@stanford.edu>
+
+	* CLI/Nodeset.py: add --autostep=auto and --autostep=x% option (#161).
+
+	* NodeSet: add autostep property to allow changing the way every RangeSet of
+	a NodeSet object is displayed (eg. node[2-8/2] instead of node[2,4,6,8]).
+	Autostep value is the min number of indexes that are found at equal distance
+	of each other inside a range before NodeSet starts to use this syntax.
+
+2015-05-18 S. Thiell <stephane.thiell@cea.fr>
+
+	* Version 1.6.92 released.
+
+2015-04-10 S. Thiell <stephane.thiell@cea.fr>
+
+	* Tree: implement task.copy() in tree mode using temporary tar file.
+
+2015-04-01 S. Thiell <stephane.thiell@cea.fr>
+
+	* Tree: allow local command execution on gateways by adding remote=False to
+	task.shell()/run().  In practice with this patch, we can now easily
+	execute local commands on (remote) gateways using node argument like
+	`ipmitool -H %h` to spread the load between gateways.
+
+2015-03-24 S. Thiell <stephane.thiell@cea.fr>
+
+	* NodeSet.py: disallow opening bracket after digit (ticket #228).
+
+2015-03-23 S. Thiell <stephane.thiell@cea.fr>
+
+	* Clush.py: Warn user of possible use of shell globbing, especially when
+	using brackets and bash without GLOBIGNORE set (ticket #225).
+	* Clush.py: Fix --diff against null content (ticket #214).
+
+2015-03-19 S. Thiell <stephane.thiell@cea.fr>
+
+	* Task.py: Make max_retcode() return None on no-op. Until now, max_retcode()
+	returned 0 by default, so even when no command was able to finish (for
+	example, due to reached timeout). This behavior did not allow users to
+	distinguish between successful commands and such no-op.
+
+2015-03-11 S. Thiell <stephane.thiell@cea.fr>
+
+	* Worker.py: Introduce StreamWorker as a generic worker class to manage a
+	set of streams (using one EngineClient with multiple I/O streams
+	internally). It's a concrete class that is now used in Gateway.py to
+	manage I/O from the parent host in tree propagation mode. Also changed
+	WorkerSimple (and thus WorkerPopen) to inherit from StreamWorker.
+
+2014-05-20 S. Thiell <stephane.thiell@cea.fr>
+
+	* EngineClient.py: Code improvement to support multiple customizable I/O
+	streams per EngineClient in different mode, each being named and having
+	their own read/write buffers and attributes.
+
+2014-04-30 A. Degremont <aurelien.degremont@cea.fr>
+
+	* Clush.py: Add a 'worker' option to switch default worker (ticket #221).
+
+2014-04-23 S. Thiell <stephane.thiell@cea.fr>
+
+	* EPoll.py: Close epoll control file descriptor when engine is released.
+
+2014-01-26 A. Degremont <aurelien.degremont@cea.fr>
+
+	* NodeUtils.py: Add group source caching expiration (ticket #98).
+
+2014-01-16 S. Thiell <stephane.thiell@cea.fr>
+
+	* RangeSet.py: Multidimensional RangeSet support (new RangeSetND class).
+	Created RangeSetND class to manage a matrix of RangeSet objects. Folding
+	of such objects is quite complex and time consuming. A special
+	optimization is provided when only one dimension is varying. Patch by
+	aurelien.degremont@cea.fr and stephane.thiell@cea.fr.
+
+	* NodeSet.py: Multidimensional nodeset support.  Added support of
+	RangeSetND to NodeSet. Optimized NodeSet so that 1D NodeSet objects are
+	still using RangeSet (ticket #92). Also benefiting from RangeSetND
+	optimization when only one dimension is varying. Patch by
+	aurelien.degremont@cea.fr and stephane.thiell@cea.fr.
+
+2014-01-14 S. Thiell <stephane.thiell@cea.fr>
+
+	* NodeSet.py: fix and clean fromall()/@* magic and add resolver option to
+	grouplist()'s NodeSet module function.
+
+2014-01-14 S. Thiell <stephane.thiell@cea.fr>
+
+	* NodeSet.py: Define module API to access and set group resolver used for
+	@-prefixed (eg. '@group') resolution. This is used to circumvent accessing
+	and setting NodeSet module's variable 'RESOLVER_STD_GROUP' directly, which
+	is not convenient and error prone. The new functions are
+	std_group_resolver() and set_std_group_resolver(). Updated User Guide.
+
+	* CLI/Clush.py: ignore IOError on stdin reader thread, but print a warning
+	in verbose or debug mode (ticket #201).
+
+2014-01-06 S. Thiell <stephane.thiell@cea.fr>
+
+	* NodeSet.py: Fix internal implementation of NodeSet.contiguous(), that
+	is, as NodeSet is mutable, we should avoid using the same NodeSet instance
+	in NodeSet.contiguous() for different NodeSet values.
+
+2013-12-17 S. Thiell <stephane.thiell@cea.fr>
+
+	* Task.py: fix task.iter_buffers() and worker.iter_buffers() to allow
+	optional argument match_keys to be an empty list for convenience. It
+	should be set to None to disable match_keys check. Also check that
+	match_keys is a true key/node sequence and not a string.
+
+2013-11-05 S. Thiell <stephane.thiell@cea.fr>
+
+	* EngineClient.py: Hide unwanted debug messages: when aborting a task,
+	cleanup of associated resources may lead to dropped inter-task messages
+	through the EnginePort mechanism. We now only display associated warning
+	messages when debugging is enabled...
+
+	* Task.py: Fix abort() race condition.
+
+	* CLI/Clush.py: Fix a defect to allow the use of command timeout when
+	copying files (with clush -u delay -c ..., ticket #220).
+
+2013-11-04 A. Degremont <aurelien.degremont@cea.fr>
+
+	* Worker/Rsh.py: Add a Rsh worker. It is compatible with rsh clones
+	like mrsh/krsh. (ticket #216).
+	* Task.py: Add a 'worker' default option for Task object. It is used
+	in Task.shell() and Task.copy().
+
+2012-09-13 S. Thiell <stephane.thiell@cea.fr>
+
+	* Engine.py: Allow EngineTimer with immediate fire date, that is, a fire
+	delay of 0s. Obviously not fired in time, such a timer will still be armed
+	and fired as soon as possible (ticket #200).
+
+2012-08-27 S. Thiell <stephane.thiell@cea.fr>
+
+	* Engine.py: Fix catch-all used in case of KeyboardInterrupt exception
+	during runloop, resulting in ghost engine clients in that case and results
+	possibly not cleaned properly (ticket #199).
+
+2012-08-01 S. Thiell <stephane.thiell@cea.fr>
+
+	* CLI/Clush.py: Fix clush_exit() side effects thanks to latest task
+	termination improvements (tickets #185).
+
+	* Task.py: Avoid termination race condition when using multiple threads
+	and calling abort()+join() from another thread (tickets #197).
+
+2012-07-09 S. Thiell <stephane.thiell@cea.fr>
+
+	* NodeSet.py: "All nodes" extended pattern support with @* (ticket #193).
+
 2012-04-08 S. Thiell <stephane.thiell@cea.fr>
 
 	* Version 1.6 released.

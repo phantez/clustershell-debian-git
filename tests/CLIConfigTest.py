@@ -1,17 +1,20 @@
 #!/usr/bin/env python
 # ClusterShell.CLI.Config test suite
-# Written by S. Thiell 2010-09-19
+# Written by S. Thiell
 
 
 """Unit test for CLI.Config"""
 
 import resource
+import os.path
+import shutil
 import sys
 import tempfile
 import unittest
 
 sys.path.insert(0, '../lib')
 
+from TLib import make_temp_dir
 
 from ClusterShell.CLI.Clush import set_fdlimit
 from ClusterShell.CLI.Config import ClushConfig, ClushConfigError
@@ -28,12 +31,12 @@ class CLIClushConfigTest(unittest.TestCase):
         """test CLI.Config.ClushConfig (empty)"""
 
         f = tempfile.NamedTemporaryFile(prefix='testclushconfig')
-        f.write("""
-""")
+        f.write("\n")
 
         parser = OptionParser("dummy")
+        parser.install_config_options()
         parser.install_display_options(verbose_options=True)
-        parser.install_ssh_options()
+        parser.install_connector_options()
         options, _ = parser.parse_args([])
         config = ClushConfig(options, filename=f.name)
         self.assert_(config != None)
@@ -41,7 +44,7 @@ class CLIClushConfigTest(unittest.TestCase):
         self.assertEqual(config.verbosity, VERB_STD)
         self.assertEqual(config.fanout, 64)
         self.assertEqual(config.node_count, True)
-        self.assertEqual(config.connect_timeout, 30)
+        self.assertEqual(config.connect_timeout, 10)
         self.assertEqual(config.command_timeout, 0)
         self.assertEqual(config.ssh_user, None)
         self.assertEqual(config.ssh_path, None)
@@ -52,13 +55,12 @@ class CLIClushConfigTest(unittest.TestCase):
         """test CLI.Config.ClushConfig (almost empty)"""
 
         f = tempfile.NamedTemporaryFile(prefix='testclushconfig')
-        f.write("""
-[Main]
-""")
+        f.write("[Main]\n")
 
         parser = OptionParser("dummy")
+        parser.install_config_options()
         parser.install_display_options(verbose_options=True)
-        parser.install_ssh_options()
+        parser.install_connector_options()
         options, _ = parser.parse_args([])
         config = ClushConfig(options, filename=f.name)
         self.assert_(config != None)
@@ -66,13 +68,13 @@ class CLIClushConfigTest(unittest.TestCase):
         self.assertEqual(config.verbosity, VERB_STD)
         self.assertEqual(config.node_count, True)
         self.assertEqual(config.fanout, 64)
-        self.assertEqual(config.connect_timeout, 30)
+        self.assertEqual(config.connect_timeout, 10)
         self.assertEqual(config.command_timeout, 0)
         self.assertEqual(config.ssh_user, None)
         self.assertEqual(config.ssh_path, None)
         self.assertEqual(config.ssh_options, None)
         f.close()
-        
+
     def testClushConfigDefault(self):
         """test CLI.Config.ClushConfig (default)"""
 
@@ -92,8 +94,9 @@ verbosity: 1
 
         f.flush()
         parser = OptionParser("dummy")
+        parser.install_config_options()
         parser.install_display_options(verbose_options=True)
-        parser.install_ssh_options()
+        parser.install_connector_options()
         options, _ = parser.parse_args([])
         config = ClushConfig(options, filename=f.name)
         self.assert_(config != None)
@@ -132,8 +135,9 @@ ssh_options: -oStrictHostKeyChecking=no
 
         f.flush()
         parser = OptionParser("dummy")
+        parser.install_config_options()
         parser.install_display_options(verbose_options=True)
-        parser.install_ssh_options()
+        parser.install_connector_options()
         options, _ = parser.parse_args([])
         config = ClushConfig(options, filename=f.name)
         self.assert_(config != None)
@@ -168,8 +172,9 @@ ssh_options: -oStrictHostKeyChecking=no
 
         f.flush()
         parser = OptionParser("dummy")
+        parser.install_config_options()
         parser.install_display_options(verbose_options=True)
-        parser.install_ssh_options()
+        parser.install_connector_options()
         options, _ = parser.parse_args([])
         config = ClushConfig(options, filename=f.name)
         self.assert_(config != None)
@@ -224,8 +229,9 @@ verbosity: 1
 
         f.flush()
         parser = OptionParser("dummy")
+        parser.install_config_options()
         parser.install_display_options(verbose_options=True)
-        parser.install_ssh_options()
+        parser.install_connector_options()
         options, _ = parser.parse_args([])
         config = ClushConfig(options, filename=f.name)
         self.assert_(config != None)
@@ -260,8 +266,9 @@ verbosity: 1
 
         f.flush()
         parser = OptionParser("dummy")
+        parser.install_config_options()
         parser.install_display_options(verbose_options=True)
-        parser.install_ssh_options()
+        parser.install_connector_options()
         options, _ = parser.parse_args(["-f", "36", "-u", "3", "-t", "7",
                                         "--user", "foobar", "--color",
                                         "always", "-d", "-v", "-q", "-o",
@@ -281,19 +288,73 @@ verbosity: 1
         self.assertEqual(config.ssh_path, None)
         self.assertEqual(config.ssh_options, "-oSomething")
         f.close()
-        
+
     def testClushConfigWithInstalledConfig(self):
         """test CLI.Config.ClushConfig (installed config required)"""
         # This test needs installed configuration files (needed for
         # maximum coverage).
         parser = OptionParser("dummy")
+        parser.install_config_options()
         parser.install_display_options(verbose_options=True)
-        parser.install_ssh_options()
+        parser.install_connector_options()
         options, _ = parser.parse_args([])
         config = ClushConfig(options)
         self.assert_(config != None)
 
+    def testClushConfigUserOverride(self):
+        """test CLI.Config.ClushConfig (XDG_CONFIG_HOME user config)"""
 
-if __name__ == '__main__':
-    suites = [unittest.TestLoader().loadTestsFromTestCase(CLIClushConfigTest)]
-    unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite(suites))
+        # XXX Test should be improved when CLUSTERSHELL_CONFIG is available
+        # Improvement: override CLUSTERSHELL_CONFIG and set a sys clush config
+        # then verify that user config overrides CLUSTERSHELL_CONFIG as
+        # expected...
+        # For now, it has been tested manually. This test only really only
+        # ensures that user config is taken into account.
+
+        xdg_config_home_save = os.environ.get('XDG_CONFIG_HOME')
+
+        # Create fake XDG_CONFIG_HOME
+        dname = make_temp_dir()
+        try:
+            os.environ['XDG_CONFIG_HOME'] = dname
+
+            # create $XDG_CONFIG_HOME/clustershell/clush.conf
+            usercfgdir = os.path.join(dname, 'clustershell')
+            os.mkdir(usercfgdir)
+            cfgfile = open(os.path.join(usercfgdir, 'clush.conf'), 'w')
+            cfgfile.write("""
+[Main]
+fanout: 42
+connect_timeout: 14
+command_timeout: 0
+history_size: 100
+color: never
+verbosity: 2
+ssh_user: trump
+ssh_path: ~/bin/ssh
+ssh_options: -oSomeDummyUserOption=yes
+""")
+
+            cfgfile.flush()
+            parser = OptionParser("dummy")
+            parser.install_config_options()
+            parser.install_display_options(verbose_options=True)
+            parser.install_connector_options()
+            options, _ = parser.parse_args([])
+            config = ClushConfig(options) # filename=None to use defaults!
+            self.assertEqual(config.color, WHENCOLOR_CHOICES[0])
+            self.assertEqual(config.verbosity, VERB_VERB) # takes biggest
+            self.assertEqual(config.fanout, 42)
+            self.assertEqual(config.connect_timeout, 14)
+            self.assertEqual(config.command_timeout, 0)
+            self.assertEqual(config.ssh_user, 'trump')
+            self.assertEqual(config.ssh_path, '~/bin/ssh')
+            self.assertEqual(config.ssh_options, '-oSomeDummyUserOption=yes')
+            cfgfile.close()
+
+        finally:
+            if xdg_config_home_save:
+                os.environ['XDG_CONFIG_HOME'] = xdg_config_home_save
+            else:
+                del os.environ['XDG_CONFIG_HOME']
+            shutil.rmtree(dname, ignore_errors=True)

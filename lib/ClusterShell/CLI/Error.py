@@ -41,24 +41,28 @@ import sys
 
 from ClusterShell.Engine.Engine import EngineNotSupportedError
 from ClusterShell.CLI.Utils import GroupResolverConfigError  # dummy but safe
+from ClusterShell.NodeUtils import GroupResolverIllegalCharError
 from ClusterShell.NodeUtils import GroupResolverSourceError
-from ClusterShell.NodeUtils import GroupSourceException
+from ClusterShell.NodeUtils import GroupSourceError
 from ClusterShell.NodeUtils import GroupSourceNoUpcall
 from ClusterShell.NodeSet import NodeSetExternalError, NodeSetParseError
 from ClusterShell.NodeSet import RangeSetParseError
 from ClusterShell.Topology import TopologyError
-
+from ClusterShell.Worker.Worker import WorkerError
 
 GENERIC_ERRORS = (EngineNotSupportedError,
                   NodeSetExternalError,
                   NodeSetParseError,
                   RangeSetParseError,
+                  GroupResolverIllegalCharError,
                   GroupResolverSourceError,
+                  GroupSourceError,
                   GroupSourceNoUpcall,
-                  GroupSourceException,
                   TopologyError,
+                  TypeError,
                   IOError,
-                  KeyboardInterrupt)
+                  KeyboardInterrupt,
+                  WorkerError)
 
 def handle_generic_error(excobj, prog=os.path.basename(sys.argv[0])):
     """handle error given `excobj' generic script exception"""
@@ -71,15 +75,19 @@ def handle_generic_error(excobj, prog=os.path.basename(sys.argv[0])):
         print >> sys.stderr, "%s: External error:" % prog, exc
     except (NodeSetParseError, RangeSetParseError), exc:
         print >> sys.stderr, "%s: Parse error:" % prog, exc
+    except GroupResolverIllegalCharError, exc:
+        print >> sys.stderr, "%s: Illegal group character: \"%s\"" % (prog, exc)
     except GroupResolverSourceError, exc:
         print >> sys.stderr, "%s: Unknown group source: \"%s\"" % (prog, exc)
     except GroupSourceNoUpcall, exc:
         print >> sys.stderr, "%s: No %s upcall defined for group " \
             "source \"%s\"" % (prog, exc, exc.group_source.name)
-    except GroupSourceException, exc:
-        print >> sys.stderr, "%s: Other group error:" % prog, exc
+    except GroupSourceError, exc:
+        print >> sys.stderr, "%s: Group error:" % prog, exc
     except TopologyError, exc:
         print >> sys.stderr, "%s: TREE MODE:" % prog, exc
+    except (TypeError, WorkerError), exc:
+        print >> sys.stderr, "%s: %s" % (prog, exc)
     except IOError:
         # ignore broken pipe
         pass
@@ -90,4 +98,3 @@ def handle_generic_error(excobj, prog=os.path.basename(sys.argv[0])):
 
     # Exit with error code 1 (generic failure)
     return 1
-        

@@ -1,2 +1,2 @@
 version=3
-http://pypi.python.org/packages/source/C/ClusterShell/clustershell-([\d\.]*)\.tar.gz
+http://pypi.debian.net/ClusterShell/clustershell-(.*).tar.gz
