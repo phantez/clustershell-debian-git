@@ -6,7 +6,7 @@ Uploaders: Stéphan Gorget <phantez@gmail.com>
 Homepage: http://cea-hpc.github.com/clustershell/
 Build-Depends: debhelper (>= 7), python-all(>= 2.6.6-3~), python-setuptools (>= 0.6)
 X-Python-Version: >= 2.4
-Standards-Version: 3.9.3
+Standards-Version: 3.9.6
 Vcs-Svn: svn://anonscm.debian.org/python-apps/packages/clustershell/trunk/
 Vcs-Browser: http://anonscm.debian.org/viewvc/python-apps/packages/clustershell/trunk/
 
