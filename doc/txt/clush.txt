@@ -7,9 +7,9 @@ execute shell commands on a cluster
 -----------------------------------
 
 :Author: Stephane Thiell <sthiell@stanford.edu>
-:Date:   2015-11-01
+:Date:   2016-06-18
 :Copyright: CeCILL-C V1
-:Version: 1.7
+:Version: 1.7.2
 :Manual section: 1
 :Manual group: ClusterShell User Manual
 
@@ -144,6 +144,7 @@ Selecting target nodes:
   --hostfile=FILE, --machinefile=FILE
                       path to a file containing a list of single hosts, node sets or node groups, separated by spaces and lines (may be specified multiple times, one per file)
   --topology=FILE     topology configuration file to use for tree mode
+  --pick=N            pick N node(s) at random in nodeset
 
 Output behaviour:
   -q, --quiet         be quiet, print essential output only
@@ -181,6 +182,7 @@ Connection options:
                       limit time for command to run on the node
   -R WORKER, --worker=WORKER
                       worker name to use for connection (``exec``, ``ssh``, ``rsh``, ``pdsh``), default is ``ssh``
+  --remote=REMOTE     whether to enable remote execution: in tree mode, 'yes' forces connections to the leaf nodes for execution, 'no' establishes connections up to the leaf parent nodes for execution (default is 'yes') 
 
 For a short explanation of these options, see ``-h, --help``.
 

@@ -1,3 +1,10 @@
+clustershell (1.7.2-1) unstable; urgency=medium
+
+  * New upstream release
+  * Debian policy 3.9.8, no changes required
+
+ -- Stéphan Gorget <phantez@gmail.com>  Sat, 25 Jun 2016 18:31:21 +0200
+
 clustershell (1.7-1-1) unstable; urgency=low
 
   * New upstream release 1.7

@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2012-2015)
+# Copyright CEA/DAM/DIF (2012-2016)
 #  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #  Contributor: Aurelien DEGREMONT <aurelien.degremont@cea.fr>
 #
@@ -195,8 +195,11 @@ class RangeSet(set):
                     ends = end
                 stop = int(ends)
             except ValueError:
-                raise RangeSetParseError(subrange,
-                        "cannot convert string to integer")
+                if len(subrange) == 0:
+                    msg = "empty range"
+                else:
+                    msg = "cannot convert string to integer"
+                raise RangeSetParseError(subrange, msg)
 
             # check preconditions
             if stop > 1e100 or start > stop or step < 1:
@@ -939,10 +942,9 @@ class RangeSetND(object):
 
     def pads(self):
         """Get a tuple of padding length info for each dimension."""
-        try:
-            return tuple(rg.padding for rg in self._veclist[0])
-        except IndexError:
-            return ()
+        # return a tuple of max padding length for each axis
+        pad_veclist = ((rg.padding for rg in vec) for vec in self._veclist)
+        return tuple(max(pads) for pads in zip(*pad_veclist))
 
     def get_autostep(self):
         """Get autostep value (property)"""
@@ -1154,7 +1156,9 @@ class RangeSetND(object):
         # Simple heuristic that makes us faster
         if len(self._veclist) * (len(self._veclist) - 1) / 2 > max_length * 10:
             # *** nD full expand is preferred ***
-            self._veclist = [[RangeSet.fromone(i) for i in tvec] \
+            pads = self.pads()
+            self._veclist = [[RangeSet.fromone(i, pad=pads[axis])
+                              for axis, i in enumerate(tvec)]
                              for tvec in set(self._iter())]
             return
 
