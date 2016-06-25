@@ -35,7 +35,7 @@ ClusterShell Task module.
 
 Simple example of use:
 
->>> from ClusterShell.Task import task_self
+>>> from ClusterShell.Task import task_self, NodeSet
 >>>  
 >>> # get task associated with calling thread
 ... task = task_self()
@@ -45,11 +45,11 @@ Simple example of use:
 <ClusterShell.Worker.Ssh.WorkerSsh object at 0x7f41da71b890>
 >>> 
 >>> # run task in calling thread
-... task.resume()
+... task.run()
 >>> 
 >>> # get results
-... for buf, nodelist in task.iter_buffers():
-...     print NodeSet.fromlist(nodelist), buf
+... for output, nodelist in task.iter_buffers():
+...     print '%s: %s' % (NodeSet.fromlist(nodelist), output)
 ... 
 
 """
@@ -655,8 +655,8 @@ class Task(object):
         self._engine.add(port)
 
     @tasksyncmethod()
-    def _remove_port(self, port):
-        """Remove a port from Engine (private method)."""
+    def remove_port(self, port):
+        """Close and remove a port from task previously created with port()."""
         self._engine.remove(port)
 
     def port(self, handler=None, autoclose=False):
@@ -1302,7 +1302,8 @@ class Task(object):
         # create gateway channel if needed
         if gateway not in self.gateways:
             chan = PropagationChannel(self, gateway)
-            logging.getLogger(__name__).info("pchannel: creating new channel")
+            logger = logging.getLogger(__name__)
+            logger.info("pchannel: creating new channel %s", chan)
             # invoke gateway
             timeout = None # FIXME: handle timeout for gateway channels
             wrkcls = self.default('distant_worker')
@@ -1328,19 +1329,19 @@ class Task(object):
         Lookup by gateway, decref associated metaworker set and release
         channel worker if needed.
         """
-        logging.getLogger(__name__).info("pchannel_release %s %s", gateway,
-                                         metaworker)
+        logger = logging.getLogger(__name__)
+        logger.debug("pchannel_release %s %s", gateway, metaworker)
 
         if gateway not in self.gateways:
-            logging.getLogger(__name__).error("pchannel_release: no pchannel"
-                                              "found for gateway %s",
-                                              gateway)
+            logger.error("pchannel_release: no pchannel found for gateway %s",
+                         gateway)
         else:
             # TODO: delay gateway closing when other gateways are running
             chanworker, metaworkers = self.gateways[gateway]
             metaworkers.remove(metaworker)
             if len(metaworkers) == 0:
-                logging.getLogger(__name__).info("worker finishing")
+                logger.info("pchannel_release: destroying channel %s",
+                            chanworker.eh)
                 chanworker.abort()
                 # delete gateway reference
                 del self.gateways[gateway]
