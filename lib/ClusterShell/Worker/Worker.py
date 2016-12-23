@@ -1,34 +1,22 @@
 #
-# Copyright CEA/DAM/DIF (2007-2015)
-#  Contributor: Stephane THIELL <sthiell@stanford.edu>
+# Copyright (C) 2007-2016 CEA/DAM
+# Copyright (C) 2015-2016 Stephane Thiell <sthiell@stanford.edu>
 #
-# This file is part of the ClusterShell library.
+# This file is part of ClusterShell.
 #
-# This software is governed by the CeCILL-C license under French law and
-# abiding by the rules of distribution of free software.  You can  use,
-# modify and/ or redistribute the software under the terms of the CeCILL-C
-# license as circulated by CEA, CNRS and INRIA at the following URL
-# "http://www.cecill.info".
+# ClusterShell is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
 #
-# As a counterpart to the access to the source code and  rights to copy,
-# modify and redistribute granted by the license, users are provided only
-# with a limited warranty  and the software's author,  the holder of the
-# economic rights,  and the successive licensors  have only  limited
-# liability.
+# ClusterShell is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
 #
-# In this respect, the user's attention is drawn to the risks associated
-# with loading,  using,  modifying and/or developing or reproducing the
-# software by the user in light of its specific status of free software,
-# that may mean  that it is complicated to manipulate,  and  that  also
-# therefore means  that it is reserved for developers  and  experienced
-# professionals having in-depth computer knowledge. Users are therefore
-# encouraged to load and test the software's suitability as regards their
-# requirements in conditions enabling the security of their systems and/or
-# data to be ensured and,  more generally, to use and operate it in the
-# same conditions as regards security.
-#
-# The fact that you are presently reading this means that you have had
-# knowledge of the CeCILL-C license and that you accept its terms.
+# You should have received a copy of the GNU Lesser General Public
+# License along with ClusterShell; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 """
 ClusterShell worker interface.
@@ -41,6 +29,7 @@ import warnings
 
 from ClusterShell.Worker.EngineClient import EngineClient
 from ClusterShell.NodeSet import NodeSet
+from ClusterShell.Engine.Engine import FANOUT_UNLIMITED, FANOUT_DEFAULT
 
 
 class WorkerException(Exception):
@@ -102,11 +91,20 @@ class Worker(object):
         """Initializer. Should be called from derived classes."""
         # Associated EventHandler object
         self.eh = handler           #: associated :class:`.EventHandler`
+
+        # Per Worker fanout value (positive integer).
+        # Default is FANOUT_DEFAULT to use the fanout set at the Task level.
+        # Change to FANOUT_UNLIMITED to always schedule this worker.
+        # NOTE: the fanout value must be set before the Worker starts and
+        # cannot currently be changed afterwards.
+        self._fanout = FANOUT_DEFAULT
+
         # Parent task (once bound)
         self.task = None            #: worker's task when scheduled or None
         self.started = False        #: set to True when worker has started
         self.metaworker = None
         self.metarefcnt = 0
+
         # current_x public variables (updated at each event accordingly)
         self.current_node = None    #: set to node in event handler
         self.current_msg = None     #: set to stdout message in event handler

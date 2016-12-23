@@ -1,26 +1,27 @@
 %{!?python_sitelib: %global python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")}
 
 Name:          clustershell
-Version:       1.7.2
+Version:       1.7.3
 Release:       1%{?dist}
 Summary:       Python framework for efficient cluster administration
 
 Group:         System Environment/Base
-License:       CeCILL-C
+License:       LGPLv2+
 URL:           http://cea-hpc.github.io/clustershell/
 Source0:       https://github.com/cea-hpc/%{name}/archive/v%{version}.tar.gz#/%{name}-%{version}.tar.gz
 BuildRoot:     %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 BuildArch:     noarch
 BuildRequires: python-devel python-setuptools
-Requires:      PyYAML
+Requires:      python-setuptools PyYAML
 
 %description
 Tools and event-based Python library to execute commands on cluster nodes in
 parallel depending on selected engine and worker mechanisms. The library
 provides also advanced NodeSet and NodeGroups handling methods to ease and
 improve administration of large compute clusters or server farms. Three
-convenient command line utilities, clush, clubak and nodeset, allow traditional
-shell scripts to benefit some useful features offered by the library.
+convenient command line utilities, clush, clubak and nodeset (or cluset) allow
+traditional shell scripts to benefit some useful features offered by the
+library.
 
 %package -n vim-%{name}
 Summary:       VIM files for ClusterShell
@@ -51,6 +52,7 @@ ln -s conf/groups.d/local.cfg %{buildroot}/%{_sysconfdir}/clustershell/groups
 # man pages
 install -d %{buildroot}/%{_mandir}/{man1,man5}
 install -p -m 0644 doc/man/man1/clubak.1 %{buildroot}/%{_mandir}/man1/
+install -p -m 0644 doc/man/man1/cluset.1 %{buildroot}/%{_mandir}/man1/
 install -p -m 0644 doc/man/man1/clush.1 %{buildroot}/%{_mandir}/man1/
 install -p -m 0644 doc/man/man1/nodeset.1 %{buildroot}/%{_mandir}/man1/
 install -p -m 0644 doc/man/man5/clush.conf.5 %{buildroot}/%{_mandir}/man5/
@@ -68,10 +70,11 @@ rm -rf %{buildroot}
 
 %files
 %defattr(-,root,root,-)
-%doc README.md ChangeLog Licence_CeCILL-C_V1-en.txt Licence_CeCILL-C_V1-fr.txt
+%doc ChangeLog COPYING.LGPLv2.1 README.md
 %doc doc/examples
 %doc doc/sphinx
 %{_mandir}/man1/clubak.1*
+%{_mandir}/man1/cluset.1*
 %{_mandir}/man1/clush.1*
 %{_mandir}/man1/nodeset.1*
 %{_mandir}/man5/clush.conf.5*
@@ -91,6 +94,7 @@ rm -rf %{buildroot}
 %{python_sitelib}/ClusterShell/
 %{python_sitelib}/ClusterShell-*-py?.?.egg-info
 %{_bindir}/clubak
+%{_bindir}/cluset
 %{_bindir}/clush
 %{_bindir}/nodeset
 
@@ -101,6 +105,9 @@ rm -rf %{buildroot}
 %{vimdatadir}/syntax/groupsconf.vim
 
 %changelog
+* Tue Dec 20 2016 Stephane Thiell <sthiell@stanford.edu> 1.7.3-1
+- update to 1.7.3
+
 * Sat Jun 18 2016 Stephane Thiell <sthiell@stanford.edu> 1.7.2-1
 - update to 1.7.2
 

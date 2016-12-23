@@ -1,34 +1,22 @@
 #
-# Copyright CEA/DAM/DIF (2007-2014)
-#  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
+# Copyright (C) 2007-2016 CEA/DAM
+# Copyright (C) 2016 Stephane Thiell <sthiell@stanford.edu>
 #
-# This file is part of the ClusterShell library.
+# This file is part of ClusterShell.
 #
-# This software is governed by the CeCILL-C license under French law and
-# abiding by the rules of distribution of free software.  You can  use,
-# modify and/ or redistribute the software under the terms of the CeCILL-C
-# license as circulated by CEA, CNRS and INRIA at the following URL
-# "http://www.cecill.info".
+# ClusterShell is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
 #
-# As a counterpart to the access to the source code and  rights to copy,
-# modify and redistribute granted by the license, users are provided only
-# with a limited warranty  and the software's author,  the holder of the
-# economic rights,  and the successive licensors  have only  limited
-# liability.
+# ClusterShell is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
 #
-# In this respect, the user's attention is drawn to the risks associated
-# with loading,  using,  modifying and/or developing or reproducing the
-# software by the user in light of its specific status of free software,
-# that may mean  that it is complicated to manipulate,  and  that  also
-# therefore means  that it is reserved for developers  and  experienced
-# professionals having in-depth computer knowledge. Users are therefore
-# encouraged to load and test the software's suitability as regards their
-# requirements in conditions enabling the security of their systems and/or
-# data to be ensured and,  more generally, to use and operate it in the
-# same conditions as regards security.
-#
-# The fact that you are presently reading this means that you have had
-# knowledge of the CeCILL-C license and that you accept its terms.
+# You should have received a copy of the GNU Lesser General Public
+# License along with ClusterShell; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 """
 MsgTree
@@ -70,7 +58,7 @@ class MsgTreeElem(object):
         # content
         self.msgline = msgline
         self.keys = None
-   
+
     def __len__(self):
         """Length of whole message string."""
         return len(str(self))
@@ -92,7 +80,7 @@ class MsgTreeElem(object):
             shifting = self.keys
             self.keys = None
         else:
-            shifting = set([ key ])
+            shifting = set([key])
             if self.keys:
                 self.keys.difference_update(shifting)
 
@@ -107,7 +95,7 @@ class MsgTreeElem(object):
         """Shift one of our key to specified target element (trace
         mode: keep backtrace of keys)."""
         if not target_elem.keys:
-            target_elem.keys = set([ key ])
+            target_elem.keys = set([key])
         else:
             target_elem.keys.add(key)
         return target_elem
@@ -116,24 +104,18 @@ class MsgTreeElem(object):
         return list(self.lines())[i]
 
     def __iter__(self):
-        """Iterate over message lines starting from this tree element."""
-        # no msgline in root element
-        if self.msgline is None:
-            return
-        # trace the message path
-        path = [self.msgline]
-        parent = self.parent
-        while parent.msgline is not None:
-            path.append(parent.msgline)
-            parent = parent.parent
-        # rewind path
-        while path:
-            yield path.pop()
+        """Iterate over message lines up to this element."""
+        bottomtop = []
+        if self.msgline is not None:
+            bottomtop.append(self.msgline)
+            parent = self.parent
+            while parent.msgline is not None:
+                bottomtop.append(parent.msgline)
+                parent = parent.parent
+        return reversed(bottomtop)
 
     def lines(self):
-        """
-        Get the whole message lines iterator from this tree element.
-        """
+        """Get an iterator over all message lines up to this element."""
         return iter(self)
 
     splitlines = lines
@@ -153,15 +135,20 @@ class MsgTreeElem(object):
         optional associated source key. Called by MsgTree.add().
         Return corresponding MsgTreeElem (possibly newly created).
         """
+        # get/create child element
+        elem = self.children.get(msgline)
+        if elem is None:
+            elem = self.__class__(msgline, self,
+                                  self._shift == self._shift_trace)
+            self.children[msgline] = elem
+
+        # if no key is given, MsgTree is in MODE_DEFER
+        # shift down the given key otherwise
+        # Note: replace with ternary operator in py2.5+
         if key is None:
-            # No key association, MsgTree is in MODE_DEFER
-            return self.children.setdefault(msgline, \
-                self.__class__(msgline, self, self._shift == self._shift_trace))
+            return elem
         else:
-            # key given: get/create new child element and shift down the key
-            return self._shift(key, self.children.setdefault(msgline, \
-                self.__class__(msgline, self,
-                               self._shift == self._shift_trace)))
+            return self._shift(key, elem)
 
 
 class MsgTree(object):
@@ -177,7 +164,7 @@ class MsgTree(object):
 
     def __init__(self, mode=MODE_DEFER):
         """MsgTree initializer
-        
+
         The `mode' parameter should be set to one of the following constant:
 
         MODE_DEFER: all messages are processed immediately, saving memory from
@@ -249,11 +236,11 @@ class MsgTree(object):
         return self._keys.iterkeys()
 
     __iter__ = keys
-    
+
     def messages(self, match=None):
         """Return an iterator over MsgTree's messages."""
         return imap(itemgetter(0), self.walk(match))
-    
+
     def items(self, match=None, mapper=None):
         """
         Return (key, message) for each key of the MsgTree.
@@ -271,14 +258,14 @@ class MsgTree(object):
         """
         depth = 0
         # stack of (element, depth) tuples used to walk the tree
-        estack = [ (self._root, depth) ]
+        estack = [(self._root, depth)]
 
         while estack:
             elem, edepth = estack.pop()
             if len(elem.children) > 0:
                 estack += [(v, edepth + 1) for v in elem.children.values()]
             depth = max(depth, edepth)
-        
+
         return depth
 
     def walk(self, match=None, mapper=None):
@@ -291,7 +278,7 @@ class MsgTree(object):
         if self.mode == MODE_DEFER:
             self._update_keys()
         # stack of elements used to walk the tree (depth-first)
-        estack = [ self._root ]
+        estack = [self._root]
         while estack:
             elem = estack.pop()
             children = elem.children
@@ -313,7 +300,7 @@ class MsgTree(object):
         assert self.mode == MODE_TRACE, \
             "walk_trace() is only callable in trace mode"
         # stack of (element, depth) tuples used to walk the tree
-        estack = [ (self._root, 0) ]
+        estack = [(self._root, 0)]
         while estack:
             elem, edepth = estack.pop()
             children = elem.children
@@ -335,7 +322,7 @@ class MsgTree(object):
         """
         # do not walk tree in MODE_DEFER as no key is associated
         if self.mode != MODE_DEFER:
-            estack = [ self._root ]
+            estack = [self._root]
             # walk the tree to keep only matching keys
             while estack:
                 elem = estack.pop()
