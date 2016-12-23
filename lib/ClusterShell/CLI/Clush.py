@@ -1,35 +1,23 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2007-2016)
-#  Contributor: Stephane THIELL <sthiell@stanford.edu>
+# Copyright (C) 2007-2016 CEA/DAM
+# Copyright (C) 2015-2016 Stephane Thiell <sthiell@stanford.edu>
 #
-# This file is part of the ClusterShell library.
+# This file is part of ClusterShell.
 #
-# This software is governed by the CeCILL-C license under French law and
-# abiding by the rules of distribution of free software.  You can  use,
-# modify and/ or redistribute the software under the terms of the CeCILL-C
-# license as circulated by CEA, CNRS and INRIA at the following URL
-# "http://www.cecill.info".
+# ClusterShell is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
 #
-# As a counterpart to the access to the source code and  rights to copy,
-# modify and redistribute granted by the license, users are provided only
-# with a limited warranty  and the software's author,  the holder of the
-# economic rights,  and the successive licensors  have only  limited
-# liability.
+# ClusterShell is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
 #
-# In this respect, the user's attention is drawn to the risks associated
-# with loading,  using,  modifying and/or developing or reproducing the
-# software by the user in light of its specific status of free software,
-# that may mean  that it is complicated to manipulate,  and  that  also
-# therefore means  that it is reserved for developers  and  experienced
-# professionals having in-depth computer knowledge. Users are therefore
-# encouraged to load and test the software's suitability as regards their
-# requirements in conditions enabling the security of their systems and/or
-# data to be ensured and,  more generally, to use and operate it in the
-# same conditions as regards security.
-#
-# The fact that you are presently reading this means that you have had
-# knowledge of the CeCILL-C license and that you accept its terms.
+# You should have received a copy of the GNU Lesser General Public
+# License along with ClusterShell; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 """
 Execute cluster commands in parallel
@@ -216,7 +204,7 @@ class CopyOutputHandler(DirectProgressOutputHandler):
             self.update_prompt(worker)
 
 class GatherOutputHandler(OutputHandler):
-    """Gathered output event handler class."""
+    """Gathered output event handler class (clush -b)."""
 
     def __init__(self, display):
         OutputHandler.__init__(self)
@@ -278,8 +266,31 @@ class GatherOutputHandler(OutputHandler):
             self._display.vprint_err(verbexit, "clush: %s: command timeout" % \
                 NodeSet._fromlist1(worker.iter_keys_timeout()))
 
+class SortedOutputHandler(GatherOutputHandler):
+    """Sorted by node output event handler class (clush -L)."""
+
+    def ev_close(self, worker):
+        # Overrides GatherOutputHandler.ev_close()
+        self._runtimer_finalize(worker)
+
+        # Display command output, try to order buffers by rc
+        for _rc, nodelist in sorted(worker.iter_retcodes()):
+            for node in nodelist:
+                # NOTE: msg should be a MsgTreeElem as Display will iterate
+                # over it to display multiple lines. As worker.node_buffer()
+                # returns either a string or None if there is no output, it
+                # cannot be used here. We use worker.iter_node_buffers() with
+                # a single node as match_keys instead.
+                for node, msg in worker.iter_node_buffers(match_keys=(node,)):
+                    self._display.print_gather(node, msg)
+
+        self._close_common(worker)
+
+        # Notify main thread to update its prompt
+        self.update_prompt(worker)
+
 class LiveGatherOutputHandler(GatherOutputHandler):
-    """Live line-gathered output event handler class."""
+    """Live line-gathered output event handler class (-bL)."""
 
     def __init__(self, display, nodes):
         assert nodes is not None, "cannot gather local command"
@@ -644,6 +655,8 @@ def run_command(task, cmd, ns, timeout, display, remote):
     if (display.gather or display.line_mode) and ns is not None:
         if display.gather and display.line_mode:
             handler = LiveGatherOutputHandler(display, ns)
+        elif not display.gather and display.line_mode:
+            handler = SortedOutputHandler(display)
         else:
             handler = GatherOutputHandler(display)
 
