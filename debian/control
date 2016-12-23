@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Python Applications Packaging Team <python-apps-team@lists.alioth.debian.org>
 Uploaders: Stéphan Gorget <phantez@gmail.com>
 Homepage: http://cea-hpc.github.com/clustershell/
-Build-Depends: debhelper (>= 7), python-all(>= 2.6.6-3~), python-setuptools (>= 0.6), dh-python
+Build-Depends: debhelper (>= 9), python-all(>= 2.6.6-3~), python-setuptools (>= 0.6), dh-python
 X-Python-Version: >= 2.4
 Standards-Version: 3.9.8
 Vcs-Svn: svn://anonscm.debian.org/python-apps/packages/clustershell/trunk/

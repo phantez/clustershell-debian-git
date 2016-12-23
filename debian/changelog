@@ -1,3 +1,9 @@
+clustershell (1.7.3-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Stéphan Gorget <phantez@gmail.com>  Fri, 23 Dec 2016 10:46:28 +0100
+
 clustershell (1.7.2-1) unstable; urgency=medium
 
   * New upstream release
