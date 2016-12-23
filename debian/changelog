@@ -1,6 +1,8 @@
 clustershell (1.7.3-1) unstable; urgency=medium
 
   * New upstream release
+  * New binary and manpage cluset
+  * Change license from "CeCILL-C V1" to "LGPL v2.1 or later".
 
  -- Stéphan Gorget <phantez@gmail.com>  Fri, 23 Dec 2016 10:46:28 +0100
 
