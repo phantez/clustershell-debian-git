@@ -1,3 +1,11 @@
+clustershell (1.7.3-2) unstable; urgency=medium
+
+  * Add dependency python-pkg-resources
+  * Debian policy 4.0.1, no changes required
+  * closes: Bug#870359
+
+ -- Stéphan Gorget <phantez@gmail.com>  Tue, 22 Aug 2017 15:41:03 +0200
+
 clustershell (1.7.3-1) unstable; urgency=medium
 
   * New upstream release
