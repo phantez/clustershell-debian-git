@@ -12,10 +12,6 @@ shell scripts. It is also full-featured as it provides most of the
 :class:`.NodeSet` and :class:`.RangeSet` class methods (see also
 :ref:`class-NodeSet`, and :ref:`class-RangeSet`).
 
-
-The *nodeset* command supports RFC 1123 (which defines naming standards for
-host names) except that a node name can't be entirely numeric.
-
 Most of the examples in this section are using simple indexed node sets,
 however, *nodeset* supports multidimensional node sets, like *dc[1-2]n[1-99]*,
 introduced in version 1.7 (see :ref:`class-RangeSetND` for more info).
@@ -30,8 +26,10 @@ One exclusive command must be specified to *nodeset*, for example::
 
     $ nodeset --expand node[13-15,17-19]
     node13 node14 node15 node17 node18 node19
+
     $ nodeset --count node[13-15,17-19]
     6
+
     $ nodeset --fold node1-ipmi node2-ipmi node3-ipmi
     node[1-3]-ipmi
 
@@ -399,6 +397,7 @@ Arithmetic operations usage examples::
     $ nodeset -f node[1-9] -x node6 -i node[6-12]
     node[7-9]
 
+.. _nodeset-extended-patterns:
 
 *Extended patterns* support
 """""""""""""""""""""""""""
@@ -830,6 +829,67 @@ Also, version 1.7 introduces a notation extension ``@*`` (or ``@SOURCE:*``)
 that has been added to quickly represent *all nodes* (please refer to
 :ref:`clush-all-nodes` for more details).
 
+
+.. _nodeset-all-nodes:
+
+Selecting all nodes
+"""""""""""""""""""
+
+The option ``-a`` (without argument) can be used to select **all** nodes from
+a group source (see :ref:`node groups configuration <groups-config>` for more
+details on special **all** external shell command upcall). Example of use for
+the default group source::
+
+    $ nodeset -a -f
+    example[4-6,32-159]
+
+Use ``-s/--groupsource`` to select another group source.
+
+If not properly configured, the ``-a`` option may lead to runtime errors
+like::
+
+    $ nodeset -s mybrokensource -a -f
+    nodeset: External error: Not enough working methods (all or map + list)
+        to get all nodes
+
+A similar option is available with :ref:`clush-tool`, see
+:ref:`selecting all nodes with clush <clush-all-nodes>`.
+
+Node wildcards
+""""""""""""""
+
+ClusterShell 1.8 introduces node wildcards: ``*`` means match zero or more
+characters of any type; ``?`` means match exactly one character of any type.
+
+Any wildcard mask found is matched against **all** nodes from the group source
+(see :ref:`nodeset-all-nodes`).
+
+This can be especially useful for server farms, or when cluster node names
+differ.  Say that your :ref:`group configuration <groups-config>` is set to
+return the following "all nodes"::
+
+    $ nodeset -f -a
+    bckserv[1-2],dbserv[1-4],wwwserv[1-9]
+
+Then, you can use wildcards to select particular nodes, as shown below::
+
+    $ nodeset -f 'www*'
+    wwwserv[1-9]
+
+    $ nodeset -f 'www*[1-4]'
+    wwwserv[1-4]
+
+    $ nodeset -f '*serv1'
+    bckserv1,dbserv1,wwwserv1
+
+Wildcard masks are resolved prior to
+:ref:`extended patterns <nodeset-extended-patterns>`, but each mask is
+evaluated as a whole node set operand. In the example below, we select
+all nodes matching ``*serv*`` before removing all nodes matching ``www*``::
+
+    $ nodeset  -f '*serv*!www*'
+    bckserv[1-2],dbserv[1-4]
+
 .. _nodeset-rangeset:
 
 Range sets
@@ -896,8 +956,8 @@ available for range sets, for example::
     1-9,15-20
 
 For now, there is no *extended patterns* syntax for range sets as for node
-sets (cf. nodeset-extended-patterns). However, as the union operator ``,``
-is available natively by design, such expressions are still allowed::
+sets (cf. :ref:`nodeset-extended-patterns`). However, as the union operator
+``,`` is available natively by design, such expressions are still allowed::
 
     $ nodeset -fR 4-10,1-2
     1-2,4-10

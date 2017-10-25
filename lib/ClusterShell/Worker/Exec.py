@@ -1,7 +1,7 @@
 #
 # Copyright (C) 2014-2015 CEA/DAM
 # Copyright (C) 2014-2015 Aurelien Degremont <aurelien.degremont@cea.fr>
-# Copyright (C) 2014-2015 Stephane Thiell <sthiell@stanford.edu>
+# Copyright (C) 2014-2017 Stephane Thiell <sthiell@stanford.edu>
 #
 # This file is part of ClusterShell.
 #
@@ -35,6 +35,7 @@ from string import Template
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Worker.EngineClient import EngineClient
 from ClusterShell.Worker.Worker import WorkerError, DistantWorker
+from ClusterShell.Worker.Worker import _eh_sigspec_invoke_compat
 
 
 def _replace_cmd(pattern, node, rank):
@@ -56,7 +57,7 @@ def _replace_cmd(pattern, node, rank):
         delimiter = '%'
     try:
         cmd = Replacer(pattern).substitute(variables)
-    except (KeyError, ValueError), error:
+    except (KeyError, ValueError) as error:
         msg = "%s is not a valid pattern, use '%%%%' to escape '%%'" % error
         raise WorkerError(msg)
     return cmd
@@ -99,11 +100,11 @@ class ExecClient(EngineClient):
         cmd, cmd_env = self._build_cmd()
 
         # If command line is string, we need to interpret it as a shell command
-        shell = type(cmd) is str
+        shell = isinstance(cmd, str)
 
         task = self.worker.task
         if task.info("debug", False):
-            name = str(self.__class__).upper().split('.')[-1]
+            name = self.__class__.__name__.upper().split('.')[-1]
             if shell:
                 task.info("print_debug")(task, "%s: %s" % (name, cmd))
             else:
@@ -129,13 +130,13 @@ class ExecClient(EngineClient):
         self.streams.clear()
 
         if prc >= 0:
-            self._on_nodeset_rc(self.key, prc)
+            self._on_nodeset_close(self.key, prc)
         elif timeout:
             assert abort, "abort flag not set on timeout"
             self.worker._on_node_timeout(self.key)
         elif not abort:
             # if process was signaled, return 128 + signum (bash-like)
-            self._on_nodeset_rc(self.key, 128 + -prc)
+            self._on_nodeset_close(self.key, 128 + -prc)
 
         self.worker._check_fini()
 
@@ -147,13 +148,13 @@ class ExecClient(EngineClient):
         else:
             self.worker._on_start(nodes)
 
-    def _on_nodeset_rc(self, nodes, rc):
+    def _on_nodeset_close(self, nodes, rc):
         """local wrapper over _on_node_rc that can also handle nodeset"""
         if isinstance(nodes, NodeSet):
             for node in nodes:
-                self.worker._on_node_rc(node, rc)
+                self.worker._on_node_close(node, rc)
         else:
-            self.worker._on_node_rc(nodes, rc)
+            self.worker._on_node_close(nodes, rc)
 
     def _on_nodeset_msgline(self, nodes, msg, sname):
         """local wrapper over _on_node_msgline that can also handle nodeset"""
@@ -373,9 +374,12 @@ class ExecWorker(DistantWorker):
         """
         self._close_count += 1
         assert self._close_count <= len(self._clients)
-        if self._close_count == len(self._clients) and self.eh:
-            if self._has_timeout:
+        if self._close_count == len(self._clients) and self.eh is not None:
+            if self._has_timeout and hasattr(self.eh, 'ev_timeout'):
+                # Legacy ev_timeout event
                 self.eh.ev_timeout(self)
-            self.eh.ev_close(self)
+            _eh_sigspec_invoke_compat(self.eh.ev_close, 2, self,
+                                      self._has_timeout)
+
 
 WORKER_CLASS = ExecWorker

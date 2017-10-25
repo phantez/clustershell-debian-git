@@ -1,0 +1,6 @@
+[console_scripts]
+clubak = ClusterShell.CLI.Clubak:main
+nodeset = ClusterShell.CLI.Nodeset:main
+cluset = ClusterShell.CLI.Nodeset:main
+clush = ClusterShell.CLI.Clush:main
+

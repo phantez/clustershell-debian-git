@@ -1,7 +1,7 @@
 #
 # Copyright (C) 2010-2016 CEA/DAM
 # Copyright (C) 2010-2016 Aurelien Degremont <aurelien.degremont@cea.fr>
-# Copyright (C) 2015-2016 Stephane Thiell <sthiell@stanford.edu>
+# Copyright (C) 2015-2017 Stephane Thiell <sthiell@stanford.edu>
 #
 # This file is part of ClusterShell.
 #
@@ -29,15 +29,30 @@ to external node groups sources in separate namespaces (example of
 group sources are: files, jobs scheduler, custom scripts, etc.).
 """
 
+try:
+    from configparser import ConfigParser, NoOptionError, NoSectionError
+except ImportError:
+    # Python 2 compat
+    from ConfigParser import ConfigParser, NoOptionError, NoSectionError
+
+import errno
+from functools import wraps
 import glob
 import logging
 import os
 import shlex
 import time
 
-from ConfigParser import ConfigParser, NoOptionError, NoSectionError
 from string import Template
 from subprocess import Popen, PIPE
+
+try:
+    basestring
+except NameError:
+    basestring = str
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class GroupSourceError(Exception):
@@ -94,7 +109,7 @@ class GroupSource(object):
 
     def resolv_list(self):
         """Return a list of all group names for this group source"""
-        return self.groups.keys()
+        return list(self.groups)
 
     def resolv_all(self):
         """Return the content of all groups as defined by this GroupSource"""
@@ -187,7 +202,8 @@ class UpcallGroupSource(GroupSource):
         """
         cmdline = Template(self.upcalls[cmdtpl]).safe_substitute(args)
         self.logger.debug("EXEC '%s'", cmdline)
-        proc = Popen(cmdline, stdout=PIPE, shell=True, cwd=self.cfgdir)
+        proc = Popen(cmdline, stdout=PIPE, shell=True, cwd=self.cfgdir,
+                     universal_newlines=True)
         output = proc.communicate()[0].strip()
         self.logger.debug("READ '%s'", output)
         if proc.returncode != 0:
@@ -248,8 +264,10 @@ class UpcallGroupSource(GroupSource):
         Return the group name matching the provided node, using the
         cached value if available.
         """
-        return self._upcall_cache('reverse', self._cache['reverse'], node,
-                                  NODE=node)
+        # Cast node to string as cache key must be hashable
+        node_str = str(node)
+        return self._upcall_cache('reverse', self._cache['reverse'], node_str,
+                                  NODE=node_str)
 
 
 class YAMLGroupLoader(object):
@@ -283,18 +301,15 @@ class YAMLGroupLoader(object):
 
     def _load(self):
         """Load or reload YAML group file to create GroupSource objects."""
-        yamlfile = open(self.filename) # later use: with open(filepath) as yfile
-        try:
+        with open(self.filename) as yamlfile:
             try:
                 import yaml
                 sources = yaml.load(yamlfile)
-            except ImportError, exc:
+            except ImportError as exc:
                 msg = "Disable autodir or install PyYAML!"
                 raise GroupResolverConfigError("%s (%s)" % (str(exc), msg))
-            except yaml.YAMLError, exc:
+            except yaml.YAMLError as exc:
                 raise GroupResolverConfigError("%s: %s" % (self.filename, exc))
-        finally:
-            yamlfile.close()
 
         # NOTE: change to isinstance(sources, collections.Mapping) with py2.6+
         if not isinstance(sources, dict):
@@ -305,9 +320,20 @@ class YAMLGroupLoader(object):
 
         for srcname, groups in sources.items():
 
+            # check for valid types returned by PyYAML Loader
+            if not isinstance(srcname, basestring):
+                fmt = '%s: group source %s not a string (add quotes?)'
+                raise GroupResolverConfigError(fmt % (self.filename, srcname))
+
             if not isinstance(groups, dict):
                 fmt = "%s: invalid content (group source '%s' is not a dict)"
                 raise GroupResolverConfigError(fmt % (self.filename, srcname))
+
+            for grp in groups:
+                if not isinstance(grp, basestring):
+                    fmt = '%s: %s: group name %s not a string (add quotes?)'
+                    raise GroupResolverConfigError(fmt % (self.filename,
+                                                          srcname, grp))
 
             if first:
                 self._groups[srcname] = groups
@@ -323,7 +349,7 @@ class YAMLGroupLoader(object):
     def __iter__(self):
         """Iterate over GroupSource objects."""
         # safe as long as self.sources is set at init (once)
-        return self.sources.itervalues()
+        return iter(self.sources.values())
 
     def groups(self, sourcename):
         """
@@ -352,18 +378,33 @@ class GroupResolver(object):
     """
 
     def __init__(self, default_source=None, illegal_chars=None):
-        """Initialize GroupResolver object."""
+        """Lazy initialization of a new GroupResolver object."""
         self._sources = {}
         self._default_source = default_source
+        self._initialized = False
         self.illegal_chars = illegal_chars or set()
-        if default_source:
-            self._sources[default_source.name] = default_source
 
+    def _late_init(self):
+        """Override method to initialize object just before it is needed."""
+        if self._default_source:
+            self._sources[self._default_source.name] = self._default_source
+        self._initialized = True  # overriding methods should call super
+
+    def init(func):
+        @wraps(func)
+        def wrapper(self, *args):
+            if not self._initialized:
+                self._late_init()
+            return func(self, *args)
+        return wrapper
+
+    @init
     def set_verbosity(self, value):
         """Set debugging verbosity value (DEPRECATED: use logging.DEBUG)."""
-        for source in self._sources.itervalues():
+        for source in self._sources.values():
             source.verbosity = value
 
+    @init
     def add_source(self, group_source):
         """Add a GroupSource to this resolver."""
         if group_source.name in self._sources:
@@ -371,20 +412,23 @@ class GroupResolver(object):
                              group_source.name)
         self._sources[group_source.name] = group_source
 
+    @init
     def sources(self):
         """Get the list of all resolver source names. """
-        srcs = list(self._sources.keys())
+        srcs = list(self._sources)
         if srcs and srcs[0] is not self._default_source:
             srcs.remove(self._default_source.name)
             srcs.insert(0, self._default_source.name)
         return srcs
 
+    @init
     def _get_default_source_name(self):
         """Get default source name of resolver."""
         if self._default_source is None:
             return None
         return self._default_source.name
 
+    @init
     def _set_default_source_name(self, sourcename):
         """Set default source of resolver (by name)."""
         try:
@@ -425,6 +469,7 @@ class GroupResolver(object):
                 result.append(grpstr)
         return result
 
+    @init
     def _source(self, namespace):
         """Helper method that returns the source by namespace name."""
         if not namespace:
@@ -485,14 +530,23 @@ class GroupResolverConfig(GroupResolver):
 
     def __init__(self, filenames, illegal_chars=None):
         """
-        Initialize GroupResolverConfig from filenames. Only the first
-        accessible config filename is loaded.
+        Lazy init GroupResolverConfig object from filenames.
         """
         GroupResolver.__init__(self, illegal_chars=illegal_chars)
 
+        self.filenames = filenames
+        self.config = None
+
+    def _late_init(self):
+        """
+        Initialize object when needed. Only the first accessible config
+        filename is loaded.
+        """
+        GroupResolver._late_init(self)
+
         # support single or multiple config filenames
         self.config = ConfigParser()
-        parsed = self.config.read(filenames)
+        parsed = self.config.read(self.filenames)
 
         # check if at least one parsable config file has been found, otherwise
         # continue with an empty self._sources
@@ -555,7 +609,14 @@ class GroupResolverConfig(GroupResolver):
                                                    " a directory" % autodir)
                 # add auto sources declared in groups.d YAML files
                 for autosfn in sorted(glob.glob('%s/*.yaml' % autodir)):
-                    self._sources_from_yaml(autosfn)
+                    try:
+                        self._sources_from_yaml(autosfn)
+                    except IOError as exc:  # same as OSError in Python 3
+                        # in Python 3 only, we could just catch PermissionError
+                        if exc.errno in (errno.EACCES, errno.EPERM):
+                            # ignore YAML files that we don't have access to
+                            LOGGER.debug(exc)
+                            continue
         except (NoSectionError, NoOptionError):
             pass
 
@@ -576,7 +637,7 @@ class GroupResolverConfig(GroupResolver):
                                                                      'default'))
         # pick random default source if not provided by config
         if not self.default_source_name and self._sources:
-            self.default_source_name = self._sources.keys()[0]
+            self.default_source_name = list(self._sources)[0]
 
     def _sources_from_cfg(self, cfg, cfgdir):
         """
@@ -589,23 +650,25 @@ class GroupResolverConfig(GroupResolver):
                 for srcname in section.split(','):
                     if srcname != self.SECTION_MAIN:
                         # only map is a mandatory upcall
-                        map_upcall = cfg.get(section, 'map', True)
+                        map_upcall = cfg.get(section, 'map', raw=True)
                         all_upcall = list_upcall = reverse_upcall = ctime = None
                         if cfg.has_option(section, 'all'):
-                            all_upcall = cfg.get(section, 'all', True)
+                            all_upcall = cfg.get(section, 'all', raw=True)
                         if cfg.has_option(section, 'list'):
-                            list_upcall = cfg.get(section, 'list', True)
+                            list_upcall = cfg.get(section, 'list', raw=True)
                         if cfg.has_option(section, 'reverse'):
-                            reverse_upcall = cfg.get(section, 'reverse', True)
+                            reverse_upcall = cfg.get(section, 'reverse',
+                                                     raw=True)
                         if cfg.has_option(section, 'cache_time'):
-                            ctime = float(cfg.get(section, 'cache_time', True))
+                            ctime = float(cfg.get(section, 'cache_time',
+                                                  raw=True))
                         # add new group source
                         self.add_source(UpcallGroupSource(srcname, map_upcall,
                                                           all_upcall,
                                                           list_upcall,
                                                           reverse_upcall,
                                                           cfgdir, ctime))
-        except (NoSectionError, NoOptionError, ValueError), exc:
+        except (NoSectionError, NoOptionError, ValueError) as exc:
             raise GroupResolverConfigError(str(exc))
 
     def _sources_from_yaml(self, filepath):
