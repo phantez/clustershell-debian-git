@@ -114,9 +114,14 @@ class EngineEPoll(Engine):
                     timeo = timeout
 
                 self._current_loopcnt += 1
-                evlist = self.epolling.poll(timeo + 0.001)
 
-            except IOError, ex:
+                if timeo < 0:
+                    poll_timeo = -1
+                else:
+                    poll_timeo = timeo
+                evlist = self.epolling.poll(poll_timeo)
+
+            except IOError as ex:
                 # might get interrupted by a signal
                 if ex.errno == errno.EINTR:
                     continue

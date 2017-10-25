@@ -1,6 +1,6 @@
 #
 # Copyright (C) 2011-2016 CEA/DAM
-# Copyright (C) 2015-2016 Stephane Thiell <sthiell@stanford.edu>
+# Copyright (C) 2015-2017 Stephane Thiell <sthiell@stanford.edu>
 #
 # This file is part of ClusterShell.
 #
@@ -27,19 +27,21 @@ import base64
 import logging
 import os
 from os.path import basename, dirname, isfile, normpath
+import sys
 import tarfile
 import tempfile
 
 from ClusterShell.Event import EventHandler
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Worker.Worker import DistantWorker, WorkerError
+from ClusterShell.Worker.Worker import _eh_sigspec_invoke_compat
 from ClusterShell.Worker.Exec import ExecWorker
 
 from ClusterShell.Propagation import PropagationTreeRouter
 
 
 class MetaWorkerEventHandler(EventHandler):
-    """Handle events for the meta worker WorkerTree"""
+    """Handle events for the meta worker TreeWorker"""
 
     def __init__(self, metaworker):
         self.metaworker = metaworker
@@ -51,23 +53,13 @@ class MetaWorkerEventHandler(EventHandler):
         """
         self.logger.debug("MetaWorkerEventHandler: ev_start")
         self.metaworker._start_count += 1
-        self.metaworker._check_ini()
+        self.metaworker._check_ini()  # also generate ev_pickup events
 
-    def ev_read(self, worker):
+    def ev_read(self, worker, node, sname, msg):
         """
         Called to indicate that a worker has data to read.
         """
-        self.metaworker._on_node_msgline(worker.current_node,
-                                         worker.current_msg,
-                                         'stdout')
-
-    def ev_error(self, worker):
-        """
-        Called to indicate that a worker has error to read (on stderr).
-        """
-        self.metaworker._on_node_msgline(worker.current_node,
-                                         worker.current_errmsg,
-                                         'stderr')
+        self.metaworker._on_node_msgline(node, msg, sname)
 
     def ev_written(self, worker, node, sname, size):
         """
@@ -79,31 +71,27 @@ class MetaWorkerEventHandler(EventHandler):
         if metaworker.eh:
             metaworker.eh.ev_written(metaworker, node, sname, size)
 
-    def ev_hup(self, worker):
+    def ev_hup(self, worker, node, rc):
         """
         Called to indicate that a worker's connection has been closed.
         """
-        self.metaworker._on_node_rc(worker.current_node, worker.current_rc)
+        self.metaworker._on_node_close(node, rc)
 
-    def ev_timeout(self, worker):
+    def ev_close(self, worker, timedout):
         """
-        Called to indicate that a worker has timed out (worker timeout only).
+        Called to indicate that a worker has just finished. It may have failed
+        on timeout if timedout is set.
         """
-        # WARNING!!! this is not possible as metaworking is changing task's
-        # shared timeout set!
-        #for node in worker.iter_keys_timeout():
-        #    self.metaworker._on_node_timeout(node)
-        # we use NodeSet to copy set
-        self.logger.debug("MetaWorkerEventHandler: ev_timeout")
-        for node in NodeSet._fromlist1(worker.iter_keys_timeout()):
-            self.metaworker._on_node_timeout(node)
-
-    def ev_close(self, worker):
-        """
-        Called to indicate that a worker has just finished (it may already
-        have failed on timeout).
-        """
-        self.logger.debug("MetaWorkerEventHandler: ev_close")
+        self.logger.debug("MetaWorkerEventHandler: ev_close, timedout=%s",
+                          timedout)
+        if timedout:
+            # WARNING!!! this is not possible as metaworker is changing task's
+            # shared timeout set!
+            #for node in worker.iter_keys_timeout():
+            #    self.metaworker._on_node_timeout(node)
+            # we use NodeSet to copy set
+            for node in NodeSet._fromlist1(worker.iter_keys_timeout()):
+                self.metaworker._on_node_timeout(node)
         self.metaworker._check_fini()
         #self._completed += 1
         #if self._completed >= self.grpcount:
@@ -111,7 +99,7 @@ class MetaWorkerEventHandler(EventHandler):
         #    metaworker.eh.ev_close(metaworker)
 
 
-class WorkerTree(DistantWorker):
+class TreeWorker(DistantWorker):
     """
     ClusterShell tree worker Class.
 
@@ -159,7 +147,7 @@ class WorkerTree(DistantWorker):
 
         if self.command is None and self.source is None:
             raise ValueError("missing command or source parameter in "
-                             "WorkerTree constructor")
+                             "TreeWorker constructor")
 
         # rcopy is enforcing separated stderr to handle tar error messages
         # because stdout is used for data transfer
@@ -175,7 +163,15 @@ class WorkerTree(DistantWorker):
             envval = os.getenv(envname)
             if envval:
                 invoke_gw_args.append("%s=%s" % (envname, envval))
-        invoke_gw_args.append("python -m ClusterShell/Gateway -Bu")
+
+        # It is critical to launch a remote Python executable with the same
+        # major version (ie. python or python3) as we use the (default) pickle
+        # protocol and for example, version 3+ (Python 3 with bytes
+        # support) cannot be unpickled by Python 2.
+        python_executable = os.getenv('CLUSTERSHELL_GW_PYTHON_EXECUTABLE',
+                                      basename(sys.executable or 'python'))
+        invoke_gw_args.append(python_executable)
+        invoke_gw_args.extend(['-m', 'ClusterShell.Gateway', '-Bu'])
         self.invoke_gateway = ' '.join(invoke_gw_args)
 
         self.topology = kwargs.get('topology')
@@ -190,13 +186,13 @@ class WorkerTree(DistantWorker):
 
         self.metahandler = MetaWorkerEventHandler(self)
 
-        # gateway -> active targets selection
+        # gateway (string) -> active targets selection
         self.gwtargets = {}
 
     def _set_task(self, task):
         """
         Bind worker to task. Called by task.schedule().
-        WorkerTree metaworker: override to schedule sub-workers.
+        TreeWorker metaworker: override to schedule sub-workers.
         """
         ##if fanout is None:
         ##    fanout = self.router.fanout
@@ -210,7 +206,7 @@ class WorkerTree(DistantWorker):
         self._check_ini()
 
     def _launch(self, nodes):
-        self.logger.debug("WorkerTree._launch on %s (fanout=%d)", nodes,
+        self.logger.debug("TreeWorker._launch on %s (fanout=%d)", nodes,
                           self.task.info("fanout"))
 
         # Prepare copy params if source is defined
@@ -235,16 +231,25 @@ class WorkerTree(DistantWorker):
                               basename(normpath(self.source))
                     destdir = dirname(self.dest)
                 else:
-                    arcname = basename(normpath(self.source))
-                    destdir = os.path.normpath(self.dest)
+                    # source is a directory: if dest has a trailing slash
+                    # like in /tmp/ then arcname is basename(source)
+                    # but if dest is /tmp/newname (without leading slash) then
+                    # arcname becomes newname.
+                    if self.dest[-1] == '/':
+                        arcname = basename(self.source)
+                    else:
+                        arcname = basename(self.dest)
+                    # dirname has not the same behavior when a leading slash is
+                    # present, and we want that.
+                    destdir = dirname(self.dest)
                 self.logger.debug("copy arcname=%s destdir=%s", arcname,
                                   destdir)
 
         # And launch stuffs
         next_hops = self._distribute(self.task.info("fanout"), nodes.copy())
-        self.logger.debug("next_hops=%s"
-                          % [(str(n), str(v)) for n, v in next_hops.items()])
-        for gw, targets in next_hops.iteritems():
+        self.logger.debug("next_hops=%s" % [(str(n), str(v))
+                                            for n, v in next_hops])
+        for gw, targets in next_hops:
             if gw == targets:
                 self.logger.debug('task.shell cmd=%s source=%s nodes=%s '
                                   'timeout=%s remote=%s', self.command,
@@ -309,20 +314,18 @@ class WorkerTree(DistantWorker):
                 while len(rbuf) > 0:
                     self._write_remote(rbuf)
                     rbuf = tmptar.read(32768)
-            except OSError, exc:
+            except OSError as exc:
                 raise WorkerError(exc)
 
     def _distribute(self, fanout, dst_nodeset):
         """distribute target nodes between next hop gateways"""
-        distribution = {}
         self.router.fanout = fanout
 
+        distribution = {}
         for gw, dstset in self.router.dispatch(dst_nodeset):
-            if gw in distribution:
-                distribution[gw].add(dstset)
-            else:
-                distribution[gw] = dstset
-        return distribution
+            distribution.setdefault(str(gw), NodeSet()).add(dstset)
+
+        return tuple((NodeSet(k), v) for k, v in distribution.items())
 
     def _copy_remote(self, source, dest, targets, gateway, timeout, reverse):
         """run a remote copy in tree mode (using gateway)"""
@@ -331,7 +334,7 @@ class WorkerTree(DistantWorker):
 
         self._target_count += len(targets)
 
-        self.gwtargets[gateway] = targets.copy()
+        self.gwtargets[str(gateway)] = targets.copy()
 
         # tar commands are built here and launched on targets
         if reverse:
@@ -357,7 +360,7 @@ class WorkerTree(DistantWorker):
 
         self._target_count += len(targets)
 
-        self.gwtargets[gateway] = targets.copy()
+        self.gwtargets[str(gateway)] = targets.copy()
 
         pchan = self.task._pchannel(gateway, self)
         pchan.shell(nodes=targets, command=cmd, worker=self, timeout=timeout,
@@ -377,7 +380,7 @@ class WorkerTree(DistantWorker):
             return
 
         # rcopy only: we expect base64 encoded tar content on stdout
-        encoded = self._rcopy_bufs.setdefault(node, '') + msg
+        encoded = self._rcopy_bufs.setdefault(node, b'') + msg
         if node not in self._rcopy_tars:
             self._rcopy_tars[node] = tempfile.TemporaryFile()
 
@@ -388,15 +391,15 @@ class WorkerTree(DistantWorker):
         # keep trailing encoded chars for next time
         self._rcopy_bufs[node] = encoded[encoded_sz:]
 
-    def _on_remote_node_rc(self, node, rc, gateway):
-        """remote rc received"""
-        DistantWorker._on_node_rc(self, node, rc)
-        self.logger.debug("_on_remote_node_rc %s %s via gw %s", node,
+    def _on_remote_node_close(self, node, rc, gateway):
+        """remote node closing with return code"""
+        DistantWorker._on_node_close(self, node, rc)
+        self.logger.debug("_on_remote_node_close %s %s via gw %s", node,
                           self._close_count, gateway)
 
         # finalize rcopy: extract tar data
         if self.source and self.reverse:
-            for node, buf in self._rcopy_bufs.iteritems():
+            for node, buf in self._rcopy_bufs.items():
                 tarfileobj = self._rcopy_tars[node]
                 if len(buf) > 0:
                     self.logger.debug("flushing node %s buf %d bytes", node,
@@ -404,23 +407,20 @@ class WorkerTree(DistantWorker):
                     tarfileobj.write(buf)
                 tarfileobj.flush()
                 tarfileobj.seek(0)
+                tmptar = tarfile.open(fileobj=tarfileobj)
                 try:
-                    tmptar = tarfile.open(fileobj=tarfileobj)
-                    try:
-                        self.logger.debug("%s extracting %d members in dest %s",
-                                          node, len(tmptar.getmembers()),
-                                          self.dest)
-                        tmptar.extractall(path=self.dest)
-                    except IOError, ex:
-                        self._on_remote_node_msgline(node, ex, 'stderr',
-                                                     gateway)
-                # note: try-except-finally not supported before python 2.5
+                    self.logger.debug("%s extracting %d members in dest %s",
+                                      node, len(tmptar.getmembers()),
+                                      self.dest)
+                    tmptar.extractall(path=self.dest)
+                except IOError as ex:
+                    self._on_remote_node_msgline(node, ex, 'stderr', gateway)
                 finally:
                     tmptar.close()
             self._rcopy_bufs = {}
             self._rcopy_tars = {}
 
-        self.gwtargets[gateway].remove(node)
+        self.gwtargets[str(gateway)].remove(node)
         self._close_count += 1
         self._check_fini(gateway)
 
@@ -430,12 +430,13 @@ class WorkerTree(DistantWorker):
         self.logger.debug("_on_remote_node_timeout %s via gw %s", node, gateway)
         self._close_count += 1
         self._has_timeout = True
-        self.gwtargets[gateway].remove(node)
+        self.gwtargets[str(gateway)].remove(node)
         self._check_fini(gateway)
 
-    def _on_node_rc(self, node, rc):
-        DistantWorker._on_node_rc(self, node, rc)
-        self.logger.debug("_on_node_rc %s %s (%s)", node, rc, self._close_count)
+    def _on_node_close(self, node, rc):
+        DistantWorker._on_node_close(self, node, rc)
+        self.logger.debug("_on_node_close %s %s (%s)", node, rc,
+                          self._close_count)
         self._close_count += 1
 
     def _on_node_timeout(self, node):
@@ -444,10 +445,16 @@ class WorkerTree(DistantWorker):
         self._has_timeout = True
 
     def _check_ini(self):
-        self.logger.debug("WorkerTree: _check_ini (%d, %d)", self._start_count,
+        self.logger.debug("TreeWorker: _check_ini (%d, %d)", self._start_count,
                           self._child_count)
         if self.eh and self._start_count >= self._child_count:
+            # this part is called once
             self.eh.ev_start(self)
+            # Blindly generate pickup events: this could maybe be improved, for
+            # example, generated only when commands are sent to the gateways
+            # or for direct targets, using MetaWorkerEventHandler.
+            for node in self.nodes:
+                _eh_sigspec_invoke_compat(self.eh.ev_pickup, 2, self, node)
 
     def _check_fini(self, gateway=None):
         self.logger.debug("check_fini %s %s", self._close_count,
@@ -455,19 +462,20 @@ class WorkerTree(DistantWorker):
         if self._close_count >= self._target_count:
             handler = self.eh
             if handler:
-                if self._has_timeout:
+                if self._has_timeout and hasattr(handler, 'ev_timeout'):
                     handler.ev_timeout(self)
-                handler.ev_close(self)
+                _eh_sigspec_invoke_compat(handler.ev_close, 2, self,
+                                          self._has_timeout)
 
         # check completion of targets per gateway
         if gateway:
-            targets = self.gwtargets[gateway]
+            targets = self.gwtargets[str(gateway)]
             if not targets:
                 # no more active targets for this gateway
-                self.logger.debug("WorkerTree._check_fini %s call pchannel_"
+                self.logger.debug("TreeWorker._check_fini %s call pchannel_"
                                   "release for gw %s", self, gateway)
                 self.task._pchannel_release(gateway, self)
-                del self.gwtargets[gateway]
+                del self.gwtargets[str(gateway)]
 
     def _write_remote(self, buf):
         """Write buf to remote clients only."""
@@ -483,7 +491,7 @@ class WorkerTree(DistantWorker):
         for worker in self.workers:
             try:
                 worker.write(buf)
-            except OSError, exc:
+            except OSError as exc:
                 osexc = exc
 
         self._write_remote(buf)
@@ -506,6 +514,9 @@ class WorkerTree(DistantWorker):
 
     def abort(self):
         """Abort processing any action by this worker."""
-        # Not yet supported by WorkerTree
+        # Not yet supported by TreeWorker
         raise NotImplementedError("see github issue #229")
 
+
+# TreeWorker's former name (deprecated as of 1.8)
+WorkerTree = TreeWorker

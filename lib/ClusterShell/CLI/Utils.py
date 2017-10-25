@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # Copyright (C) 2010-2015 CEA/DAM
 #
@@ -24,14 +23,6 @@ CLI utility functions
 
 import sys
 
-# CLI modules might safely import the NodeSet class from here.
-from ClusterShell.NodeUtils import GroupResolverConfigError
-try:
-    from ClusterShell.NodeSet import NodeSet
-except GroupResolverConfigError, exc:
-    print >> sys.stderr, \
-        "ERROR: ClusterShell node groups configuration error:\n\t%s" % exc
-    sys.exit(1)
 
 (KIBI, MEBI, GIBI, TEBI) = (1024.0, 1024.0 ** 2, 1024.0 ** 3, 1024.0 ** 4)
 
@@ -52,21 +43,10 @@ def human_bi_bytes_unit(value):
         fmt = "%d B" % value
     return fmt
 
-def nodeset_cmp(ns1, ns2):
-    """Compare 2 nodesets by their length (we want larger nodeset
-    first) and then by first node."""
-    len_cmp = cmp(len(ns2), len(ns1))
-    if not len_cmp:
-        smaller = NodeSet.fromlist([ns1[0], ns2[0]])[0]
-        if smaller == ns1[0]:
-            return -1
-        else:
-            return 1
-    return len_cmp
+def nodeset_cmpkey(nodeset):
+    """We want larger nodeset first, then sorted by first node index."""
+    return -len(nodeset), nodeset[0]
 
-def bufnodeset_cmp(bn1, bn2):
-    """Convenience function to compare 2 (buf, nodeset) tuples by their
-    nodeset length (we want larger nodeset first) and then by first
-    node."""
-    # Extract nodesets and call nodeset_cmp
-    return nodeset_cmp(bn1[1], bn2[1])
+def bufnodeset_cmpkey(buf):
+    """Helper to get nodeset compare key from a buffer (buf, nodeset)"""
+    return nodeset_cmpkey(buf[1])

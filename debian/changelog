@@ -1,3 +1,16 @@
+clustershell (1.8-1) unstable; urgency=medium
+
+  * New upstream release
+  * Debian policy 4.1.1.1, no changes required
+  * split into 3 packages:
+    - clustershell that contains the binaries and depend on python3-clustershell
+    - python3-clustershell that contains the library for python3
+    - python-clustershell that contains the library for python2
+  * Version supported of python are now :
+    - python (>= 2.6) and python (>= 3.4)
+
+ -- Stéphan Gorget <phantez@gmail.com>  Wed, 25 Oct 2017 22:48:31 +0200
+
 clustershell (1.7.3-2) unstable; urgency=medium
 
   * Add dependency python-pkg-resources (closes: Bug#870359)

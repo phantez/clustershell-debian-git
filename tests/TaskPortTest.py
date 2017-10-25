@@ -1,17 +1,11 @@
-#!/usr/bin/env python
 # ClusterShell test suite
 # Written by S. Thiell
 
-
 """Unit test for ClusterShell inter-Task msg"""
 
-import pickle
-import sys
 import threading
 import time
 import unittest
-
-sys.path.insert(0, '../lib')
 
 from ClusterShell.Task import *
 from ClusterShell.Event import EventHandler
@@ -44,7 +38,7 @@ class TaskPortTest(unittest.TestCase):
         # send msg from main thread
         port.msg("toto")
         task_wait()
-        self.assert_(TaskPortTest.got_msg)
+        self.assertTrue(TaskPortTest.got_msg)
 
     def testPortRemove(self):
         """test remove_port()"""

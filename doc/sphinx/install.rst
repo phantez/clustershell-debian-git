@@ -4,32 +4,31 @@ Installation
 ============
 
 ClusterShell is distributed in several packages. On RedHat-like OS, we
-recommend to use the RPM  package (.rpm) distribution.
+recommend to use the RPM package (.rpm) distribution.
 
 As a system software for cluster, ClusterShell is primarily made for
-system-wide installation. However, changes have been made so that's it is now
-easy to install it without root access (see :ref:`install-pip-user`).
+system-wide installation to be used by system administrators. However,
+changes have been made so that it's now easy to install it without
+root access (see :ref:`install-pip-user`).
 
 
 Requirements
 ------------
 
-ClusterShell |version| should work with any Unix [#]_ operating systems which
-provides Python 2.4 to 2.7 (not Python 3.x validated) and OpenSSH or any
-compatible Secure Shell clients.
+ClusterShell should work with any Unix [#]_ operating systems which provides
+Python 2.6, 2.7 or 3.x and OpenSSH or any compatible Secure Shell clients.
 
 Furthermore, ClusterShell's engine has been optimized when the ``poll()``
-syscall is available or even better, when the ``epoll_wait()`` syscall (since
-Linux 2.6) is available.
+syscall is available or even better, when the ``epoll_wait()`` syscall is
+available (Linux only).
 
-For instance, ClusterShell |version| is known to work on the following
-operating systems:
+For instance, ClusterShell is known to work on the following operating systems:
 
-* GNU/Linux RedHat EL5 or CentOS 5.x (Python 2.4), EL6 (Python 2.6) and EL7
-  (Python 2.7)
-* GNU/Linux Fedora 22 to 24 (Python 2.6 - 2.7),
-* GNU/Linux Debian (wheezy and above)
-* Mac OS X 10.5.8 or more
+* GNU/Linux RHEL or CentOS 6 (Python 2.6)
+* GNU/Linux RHEL or CentOS 7 (Python 2.7)
+* GNU/Linux Fedora 22 to 26 (Python 2.6 or 2.7)
+* GNU/Linux Debian wheezy and above (Python 2.7)
+* Mac OS X 10.8+ (Python 2.6 or 2.7)
 
 Distribution
 ------------
@@ -44,30 +43,36 @@ and Arch Linux.
 Fedora
 ^^^^^^
 
-At the time of writing, ClusterShell |version| is available on Fedora 24
+At the time of writing, ClusterShell |version| is available on Fedora 26
 (releases being maintained by the Fedora Project).
 
 Install ClusterShell from *Fedora Updates*
 """"""""""""""""""""""""""""""""""""""""""
 
 ClusterShell is part of Fedora, so it is really easy to install it with
-``dnf`` or ``yum``, although you have to keep the Fedora *updates* default
-repository. The following command checks whether the packages are available
-on a Fedora machine::
+``dnf``, although you have to keep the Fedora *updates* default repository.
+The following command checks whether the packages are available on a Fedora
+system::
 
     $ dnf list \*clustershell
     Available Packages
-    clustershell.noarch                     1.7.2-1.fc24                updates
-    vim-clustershell.noarch                 1.7.2-1.fc24                updates
+    clustershell.noarch                     1.8-1.fc26                fedora
+    python2-clustershell.noarch             1.8-1.fc26                fedora
+    python3-clustershell.noarch             1.8-1.fc26                fedora
 
+Then, install ClusterShell's library module and tools using the following
+command::
 
-Then, install ClusterShell (library and tools) with the following command::
+    $ dnf install clustershell
 
-    $ dnf install clustershell vim-clustershell
+Python 2 module and tools are installed by default. If interested in Python 3
+development, simply install the additional ClusterShell's Python 3 subpackage
+using the following command::
 
-Please note that optional (but recommended) ``vim-clustershell`` package will
-install VIM syntax files for ClusterShell configuration files like
-``clush.conf`` and ``groups.conf``.
+    $ dnf install python3-clustershell
+
+Python 3 versions of the tools are installed as *tool-pythonversion*, like
+``clush-3.6``, ``cluset-3.6`` or ``nodeset-3.6`` on Fedora 26.
 
 Install ClusterShell from Fedora Updates Testing
 """"""""""""""""""""""""""""""""""""""""""""""""
@@ -82,7 +87,7 @@ packages availability in the *updates-testing* repository::
 To install, also add the ``--enablerepo=updates-testing`` option, for
 instance::
 
-    $ dnf install clustershell vim-clustershell --enablerepo=updates-testing
+    $ dnf install clustershell --enablerepo=updates-testing
 
 Red Hat Enterprise Linux (and CentOS)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -90,7 +95,7 @@ Red Hat Enterprise Linux (and CentOS)
 ClusterShell packages are maintained on Extra Packages for Enterprise Linux
 `EPEL`_ for Red Hat Enterprise Linux (RHEL) and its compatible spinoffs such
 as CentOS. At the time of writing, ClusterShell |version| is available on
-EPEL 5, 6 and 7.
+EPEL 6 and 7.
 
 
 Install ClusterShell from EPEL
@@ -102,10 +107,51 @@ done using the following command::
 
     $ yum --enablerepo=extras install epel-release
 
-Then, the ClusterShell installation procedure is quite the same of the Fedora
-*Updates* one, for instance::
+Then, the ClusterShell installation procedure is quite the same as for
+*Fedora Updates*, for instance::
 
-    $ yum install clustershell vim-clustershell
+    $ yum install clustershell
+
+Python 2 module and tools are installed by default. If interested in Python 3
+development, simply install the additional ClusterShell's Python 3 subpackage
+using the following command::
+
+    $ yum install python34-clustershell
+
+.. note:: The Python 3 subpackage is named ``python34-clustershell`` on
+          EPEL 6 and 7, instead of ``python3-clustershell``.
+
+Python 3 versions of the tools are installed as *tool-pythonversion*, like
+``clush-3.4``, ``cluset-3.4`` or ``nodeset-3.4`` on EPEL 6 and 7.
+
+openSUSE
+^^^^^^^^
+
+ClusterShell is available in openSUSE Tumbleweed (since 2017)::
+
+    $ zypper search clustershell
+    Loading repository data...
+    Reading installed packages...
+
+    S | Name                 | Summary                                               | Type
+    --+----------------------+-------------------------------------------------------+--------
+      | clustershell         | Python framework for efficient cluster administration | package
+      | python2-clustershell | ClusterShell module for Python 2                      | package
+      | python3-clustershell | ClusterShell module for Python 3                      | package
+
+
+To install ClusterShell on openSUSE Tumbleweed (Factory), use::
+
+    $ zypper install clustershell
+
+Python 2 module and tools are installed by default. If interested in Python 3
+development, simply install the additional ClusterShell's Python 3 subpackage
+using the following command::
+
+    $ zypper install python3-clustershell
+
+Python 3 versions of the tools are installed as *tool-pythonversion*, like
+``clush-3.6``, ``cluset-3.6`` or ``nodeset-3.6``.
 
 Debian
 ^^^^^^
@@ -139,11 +185,11 @@ Installing ClusterShell as root using PIP
 
 To install ClusterShell as a standard Python package using PIP [#]_ as root::
 
-    $ pip install clustershell
+    $ pip install ClusterShell
 
 Or alternatively, using the source tarball::
 
-    $ pip install clustershell-1.x.tar.gz
+    $ pip install ClusterShell-1.x.tar.gz
 
 
 .. _install-pip-user:
@@ -153,11 +199,11 @@ Installing ClusterShell as user using PIP
 
 To install ClusterShell as a standard Python package using PIP as an user::
 
-    $ pip install --user clustershell
+    $ pip install --user ClusterShell
 
 Or alternatively, using the source tarball::
 
-    $ pip install --user clustershell-1.x.tar.gz
+    $ pip install --user ClusterShell-1.x.tar.gz
 
 Then, you just need to update your ``PYTHONPATH`` environment variable to be
 able to import the library and ``PATH`` to easily use the :ref:`tools`::
