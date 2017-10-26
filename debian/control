@@ -35,7 +35,7 @@ Description: clustershell python3 libraries
 
 Package: clustershell
 Architecture: all
-Depends: ${misc:Depends}, ${python3:Depends}, python3-clustershell
+Depends: ${misc:Depends}, ${python:Depends}, python-clustershell
 Suggests: vim-addon-manager
 Recommends: python-yaml
 Description: Distributed shell that provides an efficient Python interface
