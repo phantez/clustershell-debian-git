@@ -7,7 +7,7 @@ Homepage: http://cea-hpc.github.com/clustershell/
 Build-Depends: debhelper (>= 9), python-all (>= 2.6.6-3~), python3-all (>= 3.4), python-setuptools (>= 0.6), python3-setuptools, dh-python
 X-Python-Version: >= 2.6
 X-Python3-Version: >= 3.4
-Standards-Version: 4.1.1.1
+Standards-Version: 4.1.1
 Vcs-Svn: svn://anonscm.debian.org/python-apps/packages/clustershell/trunk/
 Vcs-Browser: http://anonscm.debian.org/viewvc/python-apps/packages/clustershell/trunk/
 
@@ -15,6 +15,8 @@ Package: python-clustershell
 Architecture: all
 Section: python
 Depends: ${misc:Depends}, ${python:Depends}, python-pkg-resources
+Breaks: clustershell (<< 1.8)
+Replaces: clustershell (<< 1.8)
 Suggests: vim-addon-manager
 Recommends: python-yaml
 Description: clustershell python2 libraries

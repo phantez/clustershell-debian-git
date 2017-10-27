@@ -3,7 +3,7 @@
 #export DH_VERBOSE=1
 export PYBUILD_NAME=clustershell
 export PYBUILD_DESTDIR_python3 = debian/python3-$(PYBUILD_NAME)
-export PYBUILD_AFTER_INSTALL_python2 = rm -rf {destdir}/usr/bin; rm -rf {destdir}/etc/clustershell
+export PYBUILD_AFTER_INSTALL_python2 = rm -rf {destdir}/usr/bin {destdir}/etc/clustershell
 export PYBUILD_AFTER_INSTALL_python3 = rm -rf {destdir}/etc/clustershell
 
 %:
