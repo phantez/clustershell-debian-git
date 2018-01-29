@@ -1,5 +1,46 @@
+2016-12-20 S. Thiell <sthiell@stanford.edu>
+
+	* Version 1.7.3 released.
+
+	* conf/groups.conf.d: add an external group source example file for xCAT
+	static groups (xcat.conf.example).
+
+2016-12-18 S. Thiell <sthiell@stanford.edu>
+
+	* Clush.py: fix sorting issue with clush -L (ticket #326).
+
+2016-11-06 S. Thiell <sthiell@stanford.edu>
+
+	* cluset: add cluset command with doc to avoid a conflict with xCAT's
+	nodeset command (ticket #300).
+
+2016-10-12 All contributors
+
+	* Change license from "CeCILL-C V1" to "LGPL v2.1 or later".
+
+2016-10-04 S. Thiell <sthiell@stanford.edu>
+
+	* setup.py: remove scripts/*; use console_scripts instead.
+
+2016-10-02 S. Thiell <sthiell@stanford.edu>
+
+	* Tree.py: in copy mode, do not send tar data to local targets, but only
+	remote ones; this does fix broken pipe errors (ticket #319).
+
+	* Engine.py: implement basic per worker fanout (private), allowing the use
+	of fanout=1 in tree mode (ticket #322).
+
+2016-06-18 S. Thiell <sthiell@stanford.edu>
+
+	* Version 1.7.2 released.
+
+2016-06-07 D. Martinet  <dominique.martinet@cea.fr>
+
+	* Clush/Nodeset: add --pick N option (ticket #311).
+
 2016-05-22 S. Thiell <sthiell@stanford.edu>
 
+	* Tree.py: fix the tracking of gateway active targets (ticket #308).
 	* EngineClient.py: handle broken pipe on write() (ticket #196).
 
 2016-04-24 S. Thiell <sthiell@stanford.edu>
