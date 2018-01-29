@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell (local) test suite
 # Written by S. Thiell 2008-04-09
-# $Id: TaskEventTest.py 323 2010-08-29 21:00:18Z st-cea $
+# $Id: TaskEventTest.py 337 2010-09-05 08:35:55Z st-cea $
 
 
 """Unit test for ClusterShell Task (event-based mode)"""

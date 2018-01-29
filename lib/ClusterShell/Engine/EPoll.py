@@ -30,7 +30,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: EPoll.py 238 2010-02-25 22:30:31Z st-cea $
+# $Id: EPoll.py 384 2010-10-17 21:24:21Z st-cea $
 
 """
 A ClusterShell Engine using epoll, an I/O event notification facility.
@@ -84,7 +84,9 @@ class EngineEPoll(Engine):
         """
         Engine-specific fd unregistering. Called by Engine unregister.
         """
-        self.epolling.unregister(fd)
+        self._debug("UNREGSPEC fd=%d ev_is_set=%x"% (fd, ev_is_set))
+        if ev_is_set:
+            self.epolling.unregister(fd)
 
     def _modify_specific(self, fd, event, setvalue):
         """
@@ -102,7 +104,9 @@ class EngineEPoll(Engine):
             elif event == Engine.E_WRITE:
                 eventmask = select.EPOLLOUT
 
-        self.epolling.modify(fd, eventmask)
+            self.epolling.register(fd, eventmask)
+        else:
+            self.epolling.unregister(fd)
 
     def runloop(self, timeout):
         """
@@ -177,9 +181,9 @@ class EngineEPoll(Engine):
                 # or check for end of stream (do not handle both at the same
                 # time because handle_read() may perform a partial read)
                 elif event & select.EPOLLHUP:
-                    self._debug("EPOLLHUP fd=%d %s (r%s,w%s)" % (fd,
+                    self._debug("EPOLLHUP fd=%d %s (r%s,e%s,w%s)" % (fd,
                         client.__class__.__name__, client.reader_fileno(),
-                        client.writer_fileno()))
+                        client.error_fileno(), client.writer_fileno()))		
                     client._processing = False
 
                     if fdev & Engine.E_READ:
@@ -196,9 +200,9 @@ class EngineEPoll(Engine):
 
                 # check for writing
                 if event & select.EPOLLOUT:
-                    self._debug("EPOLLOUT fd=%d %s (r%s,w%s)" % (fd,
+                    self._debug("EPOLLOUT fd=%d %s (r%s,e%s,w%s)" % (fd,
                         client.__class__.__name__, client.reader_fileno(),
-                        client.writer_fileno()))
+                        client.error_fileno(), client.writer_fileno()))
                     assert fdev == Engine.E_WRITE
                     assert client._events & fdev
                     self.modify(client, 0, fdev)

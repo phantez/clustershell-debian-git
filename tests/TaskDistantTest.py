@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # ClusterShell (distant) test suite
 # Written by S. Thiell 2009-02-13
-# $Id: TaskDistantTest.py 322 2010-08-29 20:44:30Z st-cea $
+# $Id: TaskDistantTest.py 427 2010-12-14 13:25:38Z st-cea $
 
 
 """Unit test for ClusterShell Task (distant)"""
 
 import copy
+import pwd
 import shutil
 import sys
 import unittest
@@ -18,6 +19,7 @@ from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import *
 from ClusterShell.Worker.Ssh import WorkerSsh
 from ClusterShell.Worker.EngineClient import *
+from ClusterShell.Worker.Worker import WorkerBadArgumentError
 
 import socket
 
@@ -428,7 +430,7 @@ class TaskDistantTest(unittest.TestCase):
     def testSshUserOption(self):
         """test task.shell() with ssh_user set"""
         ssh_user_orig = self._task.info("ssh_user")
-        self._task.set_info("ssh_user", os.getlogin())
+        self._task.set_info("ssh_user", pwd.getpwuid(os.getuid())[0])
         worker = self._task.shell("/bin/echo foobar", nodes="localhost")
         self.assert_(worker != None)
         self._task.resume()
@@ -439,7 +441,7 @@ class TaskDistantTest(unittest.TestCase):
     def testSshUserOptionForScp(self):
         """test task.copy() with ssh_user set"""
         ssh_user_orig = self._task.info("ssh_user")
-        self._task.set_info("ssh_user", os.getlogin())
+        self._task.set_info("ssh_user", pwd.getpwuid(os.getuid())[0])
         worker = self._task.copy("/etc/hosts",
                 "/tmp/cs-test_testLocalhostCopyU", nodes='localhost')
         self.assert_(worker != None)
@@ -507,6 +509,96 @@ class TaskDistantTest(unittest.TestCase):
                                   handler=WriteOnReadHandler(reader))
         self._task.resume()
         self.assertEqual(reader.node_buffer("localhost"), "localhost:foobar")
+
+    def testSshBadArgumentOption(self):
+        """test WorkerSsh constructor bad argument"""
+	# Check code < 1.4 compatibility
+        self.assertRaises(WorkerBadArgumentError, WorkerSsh, "localhost",
+			  None, None)
+	# As of 1.4, ValueError is raised for missing parameter
+        self.assertRaises(ValueError, WorkerSsh, "localhost",
+			  None, None) # 1.4+
+
+    def testCopyEvents(self):
+        """test triggered events on task.copy()"""
+        test_eh = self.__class__.TEventHandlerChecker(self)
+        worker = self._task.copy("/etc/hosts",
+                "/tmp/cs-test_testLocalhostCopyEvents", nodes='localhost',
+                handler=test_eh)
+        self.assert_(worker != None)
+        # run task
+        self._task.resume()
+        self.assertEqual(test_eh.flags, EV_START | EV_HUP | EV_CLOSE)
+
+    def testWorkerAbort(self):
+        """test distant/ssh Worker abort() on timer"""
+        task = task_self()
+        self.assert_(task != None)
+        
+        # Test worker.abort() in an event handler.
+
+        class AbortOnTimer(EventHandler):
+            def __init__(self, worker):
+                EventHandler.__init__(self)
+                self.ext_worker = worker
+                self.testtimer = False
+            def ev_timer(self, timer):
+                self.ext_worker.abort()
+                self.testtimer = True
+
+        aot = AbortOnTimer(task.shell("sleep 10", nodes="localhost"))
+        self.assertEqual(aot.testtimer, False)
+        task.timer(1.5, handler=aot)
+        task.resume()
+        self.assertEqual(aot.testtimer, True)
+        
+    def testWorkerAbortSanity(self):
+        """test distant/ssh Worker abort() (sanity)"""
+        task = task_self()
+        worker = task.shell("sleep 1", nodes="localhost")
+        worker.abort()
+
+        # test noop abort() on unscheduled worker
+        worker = WorkerSsh("localhost", command="sleep 1", handler=None,
+                           timeout=None)
+        worker.abort()
+
+    def testLocalhostExplicitSshReverseCopy(self):
+        """test simple localhost rcopy with explicit ssh worker"""
+        dest = "/tmp/cs-test_testLocalhostExplicitSshRCopy"
+        shutil.rmtree(dest, ignore_errors=True)
+        os.mkdir(dest)
+        worker = WorkerSsh("localhost", source="/etc/hosts",
+                dest=dest, handler=None, timeout=10, reverse=True)
+        self._task.schedule(worker) 
+        self._task.resume()
+        self.assertEqual(worker.source, "/etc/hosts")
+        self.assertEqual(worker.dest, dest)
+        self.assert_(os.path.exists(os.path.join(dest, "hosts.localhost")))
+
+    def testLocalhostExplicitSshReverseCopyDir(self):
+        """test simple localhost rcopy dir with explicit ssh worker"""
+        dest = "/tmp/cs-test_testLocalhostExplicitSshRCopyDirectory"
+        shutil.rmtree(dest, ignore_errors=True)
+        os.mkdir(dest)
+        worker = WorkerSsh("localhost", source="/etc/rc.d",
+                dest=dest, handler=None, timeout=30, reverse=True)
+        self._task.schedule(worker) 
+        self._task.resume()
+        self.assert_(os.path.isdir(os.path.join(dest, "rc.d.localhost")))
+
+    def testLocalhostExplicitSshReverseCopyDirPreserve(self):
+        """test simple localhost preserve rcopy dir with explicit ssh worker"""
+        # pdcp worker doesn't create custom destination directory
+        dest = "/tmp/cs-test_testLocalhostExplicitSshPreserveCopyDirectory"
+        shutil.rmtree(dest, ignore_errors=True)
+        os.mkdir(dest)
+        worker = WorkerSsh("localhost", source="/etc/rc.d",
+                dest=dest, handler=None, timeout=30, preserve=True,
+                reverse=True)
+        self._task.schedule(worker) 
+        self._task.resume()
+        self.assert_(os.path.isdir(os.path.join(dest, "rc.d.localhost")))
 
 
 if __name__ == '__main__':

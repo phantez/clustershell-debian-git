@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell test suite
 # Written by S. Thiell
-# $Id: run_testsuite.py 385 2010-10-19 21:36:48Z st-cea $
+# $Id: run_testsuite.py 417 2010-11-30 21:19:41Z st-cea $
 
 """
 run_testsuite.py [-hv]
@@ -57,6 +57,9 @@ if __name__ == '__main__':
                                         "TaskTimerTest",
                                         "TaskThreadJoinTest",
                                         "TaskThreadSuspendTest",
+                                        "CLIConfig",
+                                        "CLIDisplay",
+                                        "CLIOptionParser",
                                         ])
 
     unittest.TextTestRunner(verbosity=verb).run(suite)

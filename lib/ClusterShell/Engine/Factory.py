@@ -30,7 +30,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Factory.py 238 2010-02-25 22:30:31Z st-cea $
+# $Id: Factory.py 384 2010-10-17 21:24:21Z st-cea $
 
 """
 Engine Factory to select the best working event engine for the current
@@ -59,9 +59,8 @@ class PreferredEngine(object):
         Create a new preferred Engine.
         """
         if not hint or hint == 'auto':
-            # 2010-02-11: disable automatic EngineEPoll selection as an
-            # epoll issue has been found (trac ticket #56).
-            for engine_class in [ EnginePoll ]:  # in order or preference
+            # in order or preference
+            for engine_class in [ EngineEPoll, EnginePoll ]:
                 try:
                     return engine_class(info)
                 except EngineNotSupportedError:

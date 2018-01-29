@@ -1,7 +1,7 @@
 %{!?python_sitelib: %global python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")}
 
 Name:          clustershell
-Version:       1.3.3
+Version:       1.4
 Release:       1%{?dist}
 Summary:       Python framework for efficient cluster administration
 
@@ -87,6 +87,9 @@ rm -rf %{buildroot}
 %{vimdatadir}/syntax/groupsconf.vim
 
 %changelog
+* Sat Jan 15 2011 Stephane Thiell <stephane.thiell@cea.fr> 1.4-1
+- update to 1.4
+
 * Wed Oct 20 2010 Stephane Thiell <stephane.thiell@cea.fr> 1.3.3-1
 - update to 1.3.3
 

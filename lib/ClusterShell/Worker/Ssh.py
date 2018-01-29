@@ -30,7 +30,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Ssh.py 385 2010-10-19 21:36:48Z st-cea $
+# $Id: Ssh.py 418 2010-11-30 21:42:42Z st-cea $
 
 """
 ClusterShell Ssh/Scp support
@@ -44,7 +44,7 @@ import signal
 
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Worker.EngineClient import EngineClient
-from ClusterShell.Worker.Worker import DistantWorker, WorkerBadArgumentError
+from ClusterShell.Worker.Worker import DistantWorker
 
 
 class Ssh(EngineClient):
@@ -100,30 +100,27 @@ class Ssh(EngineClient):
         self.file_writer = self.popen.stdin
 
         self.worker._on_start()
-
         return self
 
-    def _close(self, force, timeout):
+    def _close(self, abort, flush, timeout):
         """
-        Close client. Called by engine after the client has been
-        unregistered. This method should handle all termination types
-        (normal, forced or on timeout).
+        Close client. See EngineClient._close().
         """
-        if not force and self._rbuf:
+        if flush and self._rbuf:
             # We still have some read data available in buffer, but no
             # EOL. Generate a final message before closing.
             self.worker._on_node_msgline(self.key, self._rbuf)
 
         rc = -1
-        if force or timeout:
+        if abort:
             prc = self.popen.poll()
             if prc is None:
                 # process is still running, kill it
+                # NOTE: later, use Popen.send_signal(SIGKILL) [python2.6+]
                 os.kill(self.popen.pid, signal.SIGKILL)
-        else:
-            prc = self.popen.wait()
-            if prc >= 0:
-                rc = prc
+        prc = self.popen.wait()
+        if prc >= 0:
+            rc = prc
 
         self.popen.stdin.close()
         self.popen.stdout.close()
@@ -133,6 +130,7 @@ class Ssh(EngineClient):
         if rc >= 0:
             self.worker._on_node_rc(self.key, rc)
         elif timeout:
+            assert abort, "abort flag not set on timeout"
             self.worker._on_node_timeout(self.key)
 
         self.worker._check_fini()
@@ -172,7 +170,8 @@ class Scp(Ssh):
     Scp EngineClient.
     """
 
-    def __init__(self, node, source, dest, worker, stderr, timeout, preserve):
+    def __init__(self, node, source, dest, worker, stderr, timeout, preserve,
+        reverse):
         """
         Initialize Scp instance.
         """
@@ -181,14 +180,22 @@ class Scp(Ssh):
         self.dest = dest
         self.popen = None
 
-        # Directory check
-        self.isdir = os.path.isdir(self.source)
-        # Note: file sanity checks can be added to Scp._start() as
-        # soon as Task._start_thread is able to dispatch exceptions on
-        # _start (need trac ticket #21).
-    
         # Preserve modification times and modes?
         self.preserve = preserve
+
+        # Reverse copy?
+        self.reverse = reverse
+
+        # Directory?
+        if self.reverse:
+            self.isdir = os.path.isdir(self.dest)
+            if not self.isdir:
+                raise ValueError("reverse copy dest must be a directory")
+        else:
+            self.isdir = os.path.isdir(self.source)
+        # Note: file sanity checks can be added to Scp._start() as
+        # soon as Task._start_thread is able to dispatch exceptions on
+        # _start (need trac ticket #21). FIXME
 
     def _start(self):
         """
@@ -223,13 +230,23 @@ class Scp(Ssh):
             if ssh_options:
                 cmd_l.append(ssh_options)
 
-        cmd_l.append(self.source)
+        if self.reverse:
+            user = task.info("ssh_user")
+            if user:
+                cmd_l.append("%s@%s:%s" % (user, self.key, self.source))
+            else:
+                cmd_l.append("%s:%s" % (self.key, self.source))
 
-        user = task.info("ssh_user")
-        if user:
-            cmd_l.append("%s@%s:%s" % (user, self.key, self.dest))
+            cmd_l.append(os.path.join(self.dest, "%s.%s" % \
+                         (os.path.basename(self.source), self.key)))
         else:
-            cmd_l.append("%s:%s" % (self.key, self.dest))
+            cmd_l.append(self.source)
+
+            user = task.info("ssh_user")
+            if user:
+                cmd_l.append("%s@%s:%s" % (user, self.key, self.dest))
+            else:
+                cmd_l.append("%s:%s" % (self.key, self.dest))
 
         if task.info("debug", False):
             task.info("print_debug")(task, "SCP: %s" % ' '.join(cmd_l))
@@ -239,6 +256,7 @@ class Scp(Ssh):
         self.file_error = self.popen.stderr
         self.file_writer = self.popen.stdin
 
+        self.worker._on_start()
         return self
 
 
@@ -286,9 +304,11 @@ class WorkerSsh(DistantWorker):
             # secure copy
             for node in self.nodes:
                 self.clients.append(Scp(node, self.source, self.dest,
-                    self, stderr, timeout, kwargs.get('preserve', False)))
+                    self, stderr, timeout, kwargs.get('preserve', False),
+                    kwargs.get('reverse', False)))
         else:
-            raise WorkerBadArgumentError()
+            raise ValueError("missing command or source parameter in " \
+			     "WorkerSsh constructor")
 
     def _engine_clients(self):
         """
@@ -325,4 +345,11 @@ class WorkerSsh(DistantWorker):
         """
         for c in self.clients:
             c._set_write_eof()
+
+    def abort(self):
+        """
+        Abort processing any action by this worker.
+        """
+        for c in self.clients:
+            c.abort()
 
