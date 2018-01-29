@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell (local) test suite
 # Written by S. Thiell 2008-04-09
-# $Id: TaskEventTest.py 232 2010-02-23 23:19:17Z st-cea $
+# $Id: TaskEventTest.py 323 2010-08-29 21:00:18Z st-cea $
 
 
 """Unit test for ClusterShell Task (event-based mode)"""
@@ -55,10 +55,12 @@ class TestHandler(EventHandler):
     def ev_read(self, worker):
         self.did_read = True
         assert worker.last_read() == "abcdefghijklmnopqrstuvwxyz"
+        assert worker.last_error() != "abcdefghijklmnopqrstuvwxyz"
 
     def ev_error(self, worker):
         self.did_readerr = True
         assert worker.last_error() == "errerrerrerrerrerrerrerr"
+        assert worker.last_read() != "errerrerrerrerrerrerrerr"
 
     def ev_close(self, worker):
         self.did_close = True
