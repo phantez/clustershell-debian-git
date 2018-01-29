@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2007, 2008, 2009)
+# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010, 2011)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -30,7 +30,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Poll.py 238 2010-02-25 22:30:31Z st-cea $
+# $Id: Poll.py 460 2011-02-07 23:22:45Z st-cea $
 
 """
 A poll() based ClusterShell Engine.
@@ -69,7 +69,7 @@ class EnginePoll(Engine):
             # get a polling object
             self.polling = select.poll()
         except AttributeError:
-            raise EngineNotSupportedError()
+            raise EngineNotSupportedError(EnginePoll.identifier)
 
     def _register_specific(self, fd, event):
         if event & (Engine.E_READ | Engine.E_ERROR):

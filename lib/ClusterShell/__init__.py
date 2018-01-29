@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010)
+# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010, 2011)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -30,7 +30,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: __init__.py 434 2011-01-15 22:16:13Z st-cea $
+# $Id: __init__.py 493 2011-03-19 20:25:12Z st-cea $
 
 
 """ClusterShell Python Library
@@ -46,9 +46,9 @@ Please see first:
   - ClusterShell.Task
 """
 
-__version__ = '1.4'
+__version__ = '1.4.3'
 __version_info__ = tuple([ int(_n) for _n in __version__.split('.')])
-__date__    = '2011/01/15'
+__date__    = '2011/03/19'
 __author__  = 'Stephane Thiell <stephane.thiell@cea.fr>'
 __url__     = 'http://clustershell.sourceforge.net/'
 

@@ -1,0 +1,195 @@
+=========
+ nodeset
+=========
+
+-----------------------------------
+compute advanced nodeset operations
+-----------------------------------
+
+:Author: Stephane Thiell, CEA DAM  <stephane.thiell@cea.fr>
+:Date:   2011-03-19
+:Copyright: CeCILL-C V1
+:Version: 1.4.3
+:Manual section: 1
+:Manual group: ClusterShell User Manual
+
+
+SYNOPSIS
+========
+
+ ``nodeset`` [COMMAND] [OPTIONS] [nodeset1 [-ixX] nodeset2|...]
+
+
+DESCRIPTION
+===========
+The ``nodeset`` command is an utility command provided with the ClusterShell
+library which implements some features of the NodeSet and RangeSet classes.
+It provides easy manipulation of indexed cluster nodes and node groups.
+
+OPTIONS
+=======
+
+  --version             show program's version number and exit
+  -h, --help            show this help message and exit
+  -s GROUPSOURCE, --groupsource=GROUPSOURCE
+                        optional ``groups.conf``\(5) group source to use
+
+  Commands:
+    -c, --count         show number of nodes in nodeset(s)
+    -e, --expand        expand nodeset(s) to separate nodes
+    -f, --fold          fold nodeset(s) (or separate nodes) into one nodeset
+    -l, --list          list node groups, followed by corresponding nodes when specified two times (``-ll``), and also nodes count when specified three times (``-lll``). See also -s GROUPSOURCE.
+    -r, --regroup       fold nodes using node groups (see -s GROUPSOURCE)
+    --groupsources      list all configured group sources (see ``groups.conf``\(5))
+
+  Operations:
+    -x SUB_NODES, --exclude=SUB_NODES
+                        exclude specified nodeset
+    -i AND_NODES, --intersection=AND_NODES
+                        calculate nodesets intersection
+    -X XOR_NODES, --xor=XOR_NODES
+                        calculate symmetric difference between nodesets
+
+  Options:
+    -a, --all           call external node groups support to display all nodes
+    --autostep=AUTOSTEP
+                        auto step threshold number when folding nodesets, if not specified, auto step is disabled. Example: autostep=4, "node2 node4 node6" folds in node[2,4,6] but autostep=3, "node2 node4 node6" folds in node[2-6/2]
+    -d, --debug         output more messages for debugging purpose
+    -q, --quiet         be quiet, print essential output only
+    -R, --rangeset      switch to RangeSet instead of NodeSet. Useful when
+                        working on numerical cluster ranges, eg. 1,5,18-31
+    -G, --groupbase     hide group source prefix (always `@groupname`)
+    -S SEPARATOR, --separator=SEPARATOR
+                        separator string to use when expanding nodesets
+                        (default: ' ')
+    -I SLICE_RANGESET, --slice=SLICE_RANGESET
+                        return sliced off result; examples of SLICE_RANGESET are "0" for simple index selection, or "1-9/2,16" for complex rangeset selection
+    --split=MAXSPLIT    split result into a number of subsets
+
+
+For a short explanation of these options, see ``-h, --help``.
+
+If a single hyphen-minus (-) is given as a nodeset, it will be read from
+standard input.
+
+EXTENDED PATTERNS
+=================
+
+The ``nodeset`` command benefits from ClusterShell 1.3 NodeSet basic
+arithmetic addition. This feature extends recognized string patterns by
+supporting operators matching all Operations seen previously. String
+patterns are read from left to right, by proceeding any character
+operators accordinately. 
+
+Supported character operators
+    ``,``
+        indicates that the *union* of both left and right nodeset should be
+        computed before continuing
+    ``!``
+        indicates the *difference* operation
+    ``&``
+        indicates the *intersection* operation
+    ``^``
+        indicates the *symmetric difference* (XOR) operation
+
+    Care should be taken to escape these characters as needed when the shell
+    does not interpret them literally.
+
+Examples of use of extended patterns
+  :$ nodeset -f node[0-7],node[8-10]:
+
+  | node[0-10]
+  
+  :$ nodeset -f node[0-10]\!node[8-10]:
+  
+  | node[0-7]
+  
+  :$ nodeset -f node[0-10]\&node[5-13]:
+  
+  | node[5-10]
+    
+  :$ nodeset -f node[0-10]^node[5-13]:
+  
+  | node[0-4,11-13]
+
+Example of advanced usage
+  :$ nodeset -f @gpu^@slurm\:bigmem!@chassis[1-9/2]:
+
+  This computes a folded nodeset containing nodes found in group @gpu and @slurm:bigmem, but not in both, minus the nodes found in odd chassis groups from 1 to 9.
+
+
+EXIT STATUS
+===========
+
+An exit status of zero indicates success of the ``nodeset`` command. A non-zero
+exit status indicates failure.
+
+EXAMPLES
+===========
+
+Getting the node count
+  :$ nodeset -c node[0-7,32-159]:
+  
+  | 136
+  
+  :$ nodeset -c node[0-7,32-159] node[160-163]:
+  
+  | 140
+  
+  :$ nodeset -c @login:
+  
+  | 4
+
+Folding nodesets
+  :$ nodeset -f node[0-7,32-159] node[160-163]:
+  
+  | node[0-7,32-163]
+
+Expanding nodesets
+  :$ nodeset -e node[160-163]:
+
+  | node160 node161 node162 node163
+
+Excluding nodes from nodeset
+  :$ nodeset -f node[32-159] -x node33:
+
+  | node[32,34-159]
+
+Computing nodesets intersection
+  :$ nodeset -f node[32-159] -i node[0-7,20-21,32,156-159]:
+
+  | node[32,156-159]
+
+Computing nodesets symmetric difference (xor)
+  :$ nodeset -f node[33-159] --xor node[32-33,156-159]:
+
+  | node[32,34-155]
+
+
+HISTORY
+=======
+
+Command syntax has been changed since ``nodeset`` command available with ClusterShell v1.1. Operations, like *--intersection* or *-x*, are now specified between nodesets in the command line.
+
+ClusterShell v1.1:
+    :$ nodeset -f -x node[3,5-6,9] node[1-9]:
+
+    | node[1-2,4,7-8]
+
+ClusterShell v1.2+:
+    :$ nodeset -f node[1-9] -x node[3,5-6,9]:
+
+    | node[1-2,4,7-8]
+
+
+SEE ALSO
+========
+
+``clush``\(1), ``clubak``\(1), ``groups.conf``\(5).
+
+BUG REPORTS
+===========
+
+Use the following URL to submit a bug report or feedback:
+  http://sourceforge.net/apps/trac/clustershell/report
+
