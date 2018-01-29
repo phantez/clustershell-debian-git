@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010, 2011)
+# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010, 2011, 2012)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -29,26 +29,28 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: __init__.py 512 2011-06-09 16:58:25Z st-cea $
 
 
 """ClusterShell Python Library
 
-Event-based Python library to execute commands on local or distant
-cluster nodes in parallel depending on the selected engine and worker
-mechanisms. It also provides advanced NodeSet and NodeGroups handling
-methods to ease and improve administration of large compute clusters
-or server farms.
+ClusterShell is an event-driven open source Python library, designed to run
+local or distant commands in parallel on server farms or on large clusters.
+You can use ClusterShell as a building block to create cluster aware
+administration scripts and system applications in Python. It will take care of
+common issues encountered on HPC clusters, such as operating on groups of
+nodes, running distributed commands using optimized execution algorithms, as
+well as gathering results and merging identical outputs, or retrieving return
+codes. ClusterShell takes advantage of existing remote shell facilities already
+installed on your systems, like SSH.
 
 Please see first:
   - ClusterShell.NodeSet
   - ClusterShell.Task
 """
 
-__version__ = '1.5.1'
+__version__ = '1.6'
 __version_info__ = tuple([ int(_n) for _n in __version__.split('.')])
-__date__    = '2011/06/09'
+__date__    = '2012/04/08'
 __author__  = 'Stephane Thiell <stephane.thiell@cea.fr>'
-__url__     = 'http://clustershell.sourceforge.net/'
+__url__     = 'http://cea-hpc.github.com/clustershell/'
 

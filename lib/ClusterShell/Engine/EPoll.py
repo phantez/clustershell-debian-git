@@ -29,8 +29,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: EPoll.py 500 2011-05-29 16:18:05Z st-cea $
 
 """
 A ClusterShell Engine using epoll, an I/O event notification facility.
@@ -40,7 +38,6 @@ has been included in Python 2.6.
 """
 
 import errno
-import os
 import select
 import time
 
@@ -135,9 +132,9 @@ class EngineEPoll(Engine):
                 self._current_loopcnt += 1
                 evlist = self.epolling.poll(timeo + 0.001)
 
-            except IOError, e:
+            except IOError, ex:
                 # might get interrupted by a signal
-                if e.errno == errno.EINTR:
+                if ex.errno == errno.EINTR:
                     continue
 
             for fd, event in evlist:
@@ -153,9 +150,7 @@ class EngineEPoll(Engine):
                 # check for poll error condition of some sort
                 if event & select.EPOLLERR:
                     self._debug("EPOLLERR %s" % client)
-                    self.unregister_writer(client)
-                    os.close(client.fd_writer)
-                    client.fd_writer = None
+                    client._close_writer()
                     self._current_client = None
                     continue
 
@@ -170,7 +165,7 @@ class EngineEPoll(Engine):
                             client._handle_read()
                         else:
                             client._handle_error()
-                    except EngineClientEOF, e:
+                    except EngineClientEOF:
                         self._debug("EngineClientEOF %s" % client)
                         if fdev & Engine.E_READ:
                             self.remove(client)

@@ -29,8 +29,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: MsgTree.py 509 2011-06-07 23:13:52Z st-cea $
 
 """
 MsgTree
@@ -38,7 +36,7 @@ MsgTree
 ClusterShell message tree module. The purpose of MsgTree is to
 provide a shared message tree for storing message lines received
 from ClusterShell Workers (for example, from remote cluster
-commands). It should be efficient, in term of compute power and memory
+commands). It should be efficient, in term of algorithm and memory
 consumption, especially when remote messages are the same.
 """
 

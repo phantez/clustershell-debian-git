@@ -29,8 +29,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: Factory.py 460 2011-02-07 23:22:45Z st-cea $
 
 """
 Engine Factory to select the best working event engine for the current

@@ -29,8 +29,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: Ssh.py 502 2011-05-29 20:06:43Z st-cea $
 
 """
 ClusterShell Ssh/Scp support
@@ -330,21 +328,21 @@ class WorkerSsh(DistantWorker):
         """
         Write to worker clients.
         """
-        for c in self.clients:
-            c._write(buf)
+        for client in self.clients:
+            client._write(buf)
 
     def set_write_eof(self):
         """
         Tell worker to close its writer file descriptor once flushed. Do not
         perform writes after this call.
         """
-        for c in self.clients:
-            c._set_write_eof()
+        for client in self.clients:
+            client._set_write_eof()
 
     def abort(self):
         """
         Abort processing any action by this worker.
         """
-        for c in self.clients:
-            c.abort()
+        for client in self.clients:
+            client.abort()
 

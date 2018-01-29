@@ -30,8 +30,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: Config.py 470 2011-02-24 20:27:28Z st-cea $
 
 """
 CLI configuration classes
@@ -41,7 +39,7 @@ import ConfigParser
 import os
 
 from ClusterShell.CLI.Display import VERB_QUIET, VERB_STD, \
-    VERB_VERB, VERB_DEBUG, WHENCOLOR_CHOICES
+    VERB_VERB, VERB_DEBUG, THREE_CHOICES
 
 
 class ClushConfigError(Exception):
@@ -62,7 +60,7 @@ class ClushConfig(ConfigParser.ConfigParser, object):
                       "connect_timeout" : "30",
                       "command_timeout" : "0",
                       "history_size" : "100",
-                      "color" : WHENCOLOR_CHOICES[-1], # auto
+                      "color" : THREE_CHOICES[-1], # auto
                       "verbosity" : "%d" % VERB_STD,
                       "node_count" : "yes",
                       "fd_max" : "16384" }
@@ -177,9 +175,9 @@ class ClushConfig(ConfigParser.ConfigParser, object):
     def color(self):
         """color value as a string in (never, always, auto)"""
         whencolor = self._get_optional("Main", "color")
-        if whencolor not in WHENCOLOR_CHOICES:
+        if whencolor not in THREE_CHOICES:
             raise ClushConfigError("Main", "color", "choose from %s" % \
-                                   WHENCOLOR_CHOICES)
+                                   THREE_CHOICES)
         return whencolor
 
     @property

@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # ClusterShell.NodeSet test suite
 # Written by S. Thiell 2007-12-05
-# $Id: NodeSetTest.py 512 2011-06-09 16:58:25Z st-cea $
 
 
 """Unit test for NodeSet"""
 
+import binascii
 import copy
 import pickle
 import sys
@@ -13,7 +13,8 @@ import unittest
 
 sys.path.insert(0, '../lib')
 
-from ClusterShell.NodeSet import NodeSet, fold, expand
+from ClusterShell.NodeSet import RangeSet, NodeSet, fold, expand
+from ClusterShell.NodeSet import NodeGroupBase, NodeSetBase
 
 
 class NodeSetTest(unittest.TestCase):
@@ -54,6 +55,14 @@ class NodeSetTest(unittest.TestCase):
         nodeset = NodeSet.fromlist([ "cluster0", "cluster1", "cluster2", "cluster5", "cluster8", "cluster4", "cluster3" ])
         self.assertEqual(str(nodeset), "cluster[0-5,8]")
         self.assertEqual(len(nodeset), 7)
+        # updaten() test
+        nodeset.updaten(["cluster10", "cluster9"])
+        self.assertEqual(str(nodeset), "cluster[0-5,8-10]")
+        self.assertEqual(len(nodeset), 9)
+        # single nodes test
+        nodeset = NodeSet.fromlist([ "cluster0", "cluster1", "cluster", "wool", "cluster3" ])
+        self.assertEqual(str(nodeset), "cluster,cluster[0-1,3],wool")
+        self.assertEqual(len(nodeset), 5)
 
     def testDigitInPrefix(self):
         """test NodeSet digit in prefix"""
@@ -287,22 +296,22 @@ class NodeSetTest(unittest.TestCase):
         # more
         original = NodeSet("cluster0")
         nodeset = original.copy()
-        for i in xrange(1, 6000):
+        for i in xrange(1, 3000):
             nodeset = nodeset | NodeSet("cluster%d" % i)
-        self.assertEqual(len(nodeset), 6000)
-        self.assertEqual(str(nodeset), "cluster[0-5999]")
+        self.assertEqual(len(nodeset), 3000)
+        self.assertEqual(str(nodeset), "cluster[0-2999]")
         self.assertEqual(len(original), 1)
         self.assertEqual(str(original), "cluster0")
         nodeset2 = original.copy()
-        for i in xrange(1, 6000):
+        for i in xrange(1, 3000):
             nodeset2 |= NodeSet("cluster%d" % i)
         self.assertEqual(nodeset, nodeset2)
-        for i in xrange(6000, 7000):
+        for i in xrange(3000, 5000):
             nodeset2 |= NodeSet("cluster%d" % i)
-        self.assertEqual(len(nodeset2), 7000)
-        self.assertEqual(str(nodeset2), "cluster[0-6999]")
-        self.assertEqual(len(nodeset), 6000)
-        self.assertEqual(str(nodeset), "cluster[0-5999]")
+        self.assertEqual(len(nodeset2), 5000)
+        self.assertEqual(str(nodeset2), "cluster[0-4999]")
+        self.assertEqual(len(nodeset), 3000)
+        self.assertEqual(str(nodeset), "cluster[0-2999]")
         self.assertEqual(len(original), 1)
         self.assertEqual(str(original), "cluster0")
 
@@ -461,6 +470,12 @@ class NodeSetTest(unittest.TestCase):
         nodeset = NodeSet(nsstr)
         nodeset.intersection_update(NodeSet("red55,red76"))
         self.assertEqual(str(nodeset), "red[55,76]")
+
+        # single nodes test
+        nodeset = NodeSet("red,blue,yellow")
+        nodeset.intersection_update("blue,green,yellow")
+        self.assertEqual(len(nodeset), 2)
+        self.assertEqual(str(nodeset), "blue,yellow")
 
     def testIntersectSelf(self):
         """test Nodeset.intersection_update(self)"""
@@ -739,10 +754,10 @@ class NodeSetTest(unittest.TestCase):
         self.assertEqual(str(nodeset[::17]), "yeti[10,44,78]")
         nodeset = NodeSet("yeti[10-98/2]", autostep=2)
         self.assertEqual(str(nodeset[22:29]), "yeti[54-66/2]")
-        nodeset = NodeSet("yeti[10-98000000/2]", autostep=2)
-        # have to scale
-        self.assertEqual(str(nodeset[22:2900000]), "yeti[54-5800008/2]")
-        self.assertEqual(str(nodeset[22:2900000:3]), "yeti[54-5800008/6]")
+        # stepping scalability
+        nodeset = NodeSet("yeti[10-9800/2]", autostep=2)
+        self.assertEqual(str(nodeset[22:2900]), "yeti[54-5808/2]")
+        self.assertEqual(str(nodeset[22:2900:3]), "yeti[54-5808/6]")
         nodeset = NodeSet("yeti[10-14,20-26,30-33]")
         self.assertEqual(str(nodeset[2:6]), "yeti[12-14,20]")
         # multiple patterns
@@ -820,7 +835,7 @@ class NodeSetTest(unittest.TestCase):
         self.assertEqual(str(nodeset), "green[1-7/2]")
         self.assertEqual(len(nodeset), 4)
         nodeset.add("green[6-17/2]")
-        self.assertEqual(str(nodeset), "green[1-5/2,6-8,10-16/2]")
+        self.assertEqual(str(nodeset), "green[1-5/2,6-7,8-16/2]")
         self.assertEqual(len(nodeset), 10)
 
     def testRemove(self):
@@ -901,26 +916,26 @@ class NodeSetTest(unittest.TestCase):
         self.assert_("dark3002" not in nodeset)
         for node in nodeset:
             self.assert_(node in nodeset)
-        nodeset = NodeSet("scale[0-1000000]")
+        nodeset = NodeSet("scale[0-10000]")
         self.assert_("black64" not in nodeset)
-        self.assert_("scale93406" in nodeset)
-        nodeset = NodeSet("scale[0-1000000]", autostep=2)
-        self.assert_("scale93406" in nodeset[::2])
-        self.assert_("scale93407" not in nodeset[::2])
+        self.assert_("scale9346" in nodeset)
+        nodeset = NodeSet("scale[0-10000]", autostep=2)
+        self.assert_("scale9346" in nodeset[::2])
+        self.assert_("scale9347" not in nodeset[::2])
 
     def testContainsUsingPadding(self):
         """test NodeSet contains() when using padding"""
         nodeset = NodeSet("white[001,030]")
         nodeset.add("white113")
-        self.assert_(NodeSet("white30") not in nodeset)
-        self.assert_(NodeSet("white030") in nodeset)
+        self.assertTrue(NodeSet("white30") in nodeset)
+        self.assertTrue(NodeSet("white030") in nodeset)
         # case: nodeset without padding info is compared to a
         # padding-initialized range
         self.assert_(NodeSet("white113") in nodeset)
         self.assert_(NodeSet("white[001,113]") in nodeset)
-        self.assert_(NodeSet("gene0113") not in NodeSet("gene[001,030,113]"))
+        self.assert_(NodeSet("gene0113") in NodeSet("gene[001,030,113]"))
         self.assert_(NodeSet("gene0113") in NodeSet("gene[0001,0030,0113]"))
-        self.assert_(NodeSet("gene0113") not in NodeSet("gene[098-113]"))
+        self.assert_(NodeSet("gene0113") in NodeSet("gene[098-113]"))
         self.assert_(NodeSet("gene0113") in NodeSet("gene[0098-0113]"))
         # case: len(str(ielem)) >= rgpad
         nodeset = NodeSet("white[001,099]")
@@ -937,10 +952,10 @@ class NodeSetTest(unittest.TestCase):
         self.assert_(nodeset.issuperset(NodeSet("tronic[0140-0200]")))
         self.assert_(nodeset.issuperset("tronic0070"))
         self.assert_(not nodeset.issuperset("tronic0034"))
-        # check padding issue
-        self.assert_(not nodeset.issuperset("tronic36"))
-        self.assert_(not nodeset.issuperset("tronic[36-40]"))
-        self.assert_(not nodeset.issuperset(NodeSet("tronic[36-40]")))
+        # check padding issue - since 1.6 padding is ignored in this case
+        self.assert_(nodeset.issuperset("tronic36"))
+        self.assert_(nodeset.issuperset("tronic[36-40]"))
+        self.assert_(nodeset.issuperset(NodeSet("tronic[36-40]")))
         # check gt
         self.assert_(nodeset > NodeSet("tronic[0100-0200]"))
         self.assert_(not nodeset > NodeSet("tronic[0036-1630]"))
@@ -974,8 +989,8 @@ class NodeSetTest(unittest.TestCase):
         self.assert_(not nodeset <= NodeSet("artcore[3-980]"))
         self.assert_(not nodeset <= NodeSet("artcore[2-998]"))
         self.assertEqual(len(nodeset), 997)
-        # check padding issue
-        self.assert_(not nodeset.issubset("artcore[0001-1000]"))
+        # check padding issue - since 1.6 padding is ignored in this case
+        self.assert_(nodeset.issubset("artcore[0001-1000]"))
         self.assert_(not nodeset.issubset("artcore030"))
         # multiple patterns case
         nodeset = NodeSet("tronic[0036-1630],lounge[20-660/2]")
@@ -1145,6 +1160,17 @@ class NodeSetTest(unittest.TestCase):
         self.assertEqual(nodelist, ['acluster4', 'acluster39', 'acluster41', \
             'bcluster25', 'ccluster12'])
 
+    def test_nsiter(self):
+        """test NodeSet.nsiter() iterator"""
+        ns1 = NodeSet("roma[50-61]-ipmi,cors[113,115-117,130,166-169],cws-tigrou,tigrou3")
+        self.assertEqual(list(ns1), ['cors113', 'cors115', 'cors116', 'cors117', 'cors130', 'cors166', 'cors167', 'cors168', 'cors169', 'cws-tigrou', 'roma50-ipmi', 'roma51-ipmi', 'roma52-ipmi', 'roma53-ipmi', 'roma54-ipmi', 'roma55-ipmi', 'roma56-ipmi', 'roma57-ipmi', 'roma58-ipmi', 'roma59-ipmi', 'roma60-ipmi', 'roma61-ipmi', 'tigrou3'])
+        self.assertEqual(list(ns1), [str(ns) for ns in ns1.nsiter()])
+
+    def test_contiguous(self):
+        """test NodeSet.contiguous() iterator"""
+        ns1 = NodeSet("cors,roma[50-61]-ipmi,cors[113,115-117,130,166-169],cws-tigrou,tigrou3")
+        self.assertEqual(['cors', 'cors113', 'cors[115-117]', 'cors130', 'cors[166-169]', 'cws-tigrou', 'roma[50-61]-ipmi', 'tigrou3'], [str(ns) for ns in ns1.contiguous()])
+
     def testEqualityMore(self):
         """test NodeSet equality (more)"""
         self.assertEqual(NodeSet(), NodeSet())
@@ -1219,6 +1245,9 @@ class NodeSetTest(unittest.TestCase):
         nodeset2 = nodeset.copy()
         nodeset3 = nodeset.copy()
         self.assertEqual(nodeset, nodeset2) # content equality
+        self.assertTrue(isinstance(nodeset, NodeSet))
+        self.assertTrue(isinstance(nodeset2, NodeSet))
+        self.assertTrue(isinstance(nodeset3, NodeSet))
         nodeset2.remove("glycine68")
         self.assertEqual(len(nodeset), len(nodeset2) + 1)
         self.assertNotEqual(nodeset, nodeset2)
@@ -1238,8 +1267,81 @@ class NodeSetTest(unittest.TestCase):
         self.assertEqual(str(nodeset3), \
             "glycine[68,4780-4999],zclu[115-118,130,166-170]")
 
-    def testPickle(self):
-        """test pickling of NodeSet"""
+    def test_unpickle_v1_3_py24(self):
+        """test NodeSet unpickling (against v1.3/py24)"""
+        nodeset = pickle.loads(binascii.a2b_base64("gAJjQ2x1c3RlclNoZWxsLk5vZGVTZXQKTm9kZVNldApxACmBcQF9cQIoVQdfbGVuZ3RocQNLAFUJX3BhdHRlcm5zcQR9cQUoVQh5ZWxsb3clc3EGKGNDbHVzdGVyU2hlbGwuTm9kZVNldApSYW5nZVNldApxB29xCH1xCShoA0sBVQlfYXV0b3N0ZXBxCkdUskmtJZTDfVUHX3Jhbmdlc3ELXXEMKEsESwRLAUsAdHENYXViVQZibHVlJXNxDihoB29xD31xEChoA0sIaApHVLJJrSWUw31oC11xESgoSwZLCksBSwB0cRIoSw1LDUsBSwB0cRMoSw9LD0sBSwB0cRQoSxFLEUsBSwB0cRVldWJVB2dyZWVuJXNxFihoB29xF31xGChoA0tlaApHVLJJrSWUw31oC11xGShLAEtkSwFLAHRxGmF1YlUDcmVkcRtOdWgKTnViLg=="))
+        self.assertEqual(nodeset, NodeSet("blue[6-10,13,15,17],green[0-100],red,yellow4"))
+        self.assertEqual(str(nodeset), "blue[6-10,13,15,17],green[0-100],red,yellow4")
+        self.assertEqual(len(nodeset), 111)
+        self.assertEqual(nodeset[0], "blue6")
+        self.assertEqual(nodeset[1], "blue7")
+        self.assertEqual(nodeset[-1], "yellow4")
+
+    # unpickle_v1_4_py24 : unpickling fails as v1.4 does not have slice pickling workaround
+    def test_unpickle_v1_3_py26(self):
+        """test NodeSet unpickling (against v1.3/py26)"""
+        nodeset = pickle.loads(binascii.a2b_base64("gAJjQ2x1c3RlclNoZWxsLk5vZGVTZXQKTm9kZVNldApxACmBcQF9cQIoVQdfbGVuZ3RocQNLAFUJX3BhdHRlcm5zcQR9cQUoVQh5ZWxsb3clc3EGKGNDbHVzdGVyU2hlbGwuTm9kZVNldApSYW5nZVNldApxB29xCH1xCShoA0sBVQlfYXV0b3N0ZXBxCkdUskmtJZTDfVUHX3Jhbmdlc3ELXXEMKEsESwRLAUsAdHENYXViVQZibHVlJXNxDihoB29xD31xEChoA0sIaApHVLJJrSWUw31oC11xESgoSwZLCksBSwB0cRIoSw1LDUsBSwB0cRMoSw9LD0sBSwB0cRQoSxFLEUsBSwB0cRVldWJVB2dyZWVuJXNxFihoB29xF31xGChoA0tlaApHVLJJrSWUw31oC11xGShLAEtkSwFLAHRxGmF1YlUDcmVkcRtOdWgKTnViLg=="))
+        self.assertEqual(nodeset, NodeSet("blue[6-10,13,15,17],green[0-100],red,yellow4"))
+        self.assertEqual(str(nodeset), "blue[6-10,13,15,17],green[0-100],red,yellow4")
+        self.assertEqual(len(nodeset), 111)
+        self.assertEqual(nodeset[0], "blue6")
+        self.assertEqual(nodeset[1], "blue7")
+        self.assertEqual(nodeset[-1], "yellow4")
+
+    # unpickle_v1_4_py24 : unpickling fails as v1.4 does not have slice pickling workaround
+
+    def test_unpickle_v1_4_py26(self):
+        """test NodeSet unpickling (against v1.4/py26)"""
+        nodeset = pickle.loads(binascii.a2b_base64("gAJjQ2x1c3RlclNoZWxsLk5vZGVTZXQKTm9kZVNldApxACmBcQF9cQIoVQdfbGVuZ3RocQNLAFUJX3BhdHRlcm5zcQR9cQUoVQh5ZWxsb3clc3EGKGNDbHVzdGVyU2hlbGwuTm9kZVNldApSYW5nZVNldApxB29xCH1xCihoA0sBVQlfYXV0b3N0ZXBxC0dUskmtJZTDfVUHX3Jhbmdlc3EMXXENY19fYnVpbHRpbl9fCnNsaWNlCnEOSwRLBUsBh3EPUnEQSwCGcRFhVQhfdmVyc2lvbnESSwJ1YlUGYmx1ZSVzcRMoaAdvcRR9cRUoaANLCGgLR1SySa0llMN9aAxdcRYoaA5LBksLSwGHcRdScRhLAIZxGWgOSw1LDksBh3EaUnEbSwCGcRxoDksPSxBLAYdxHVJxHksAhnEfaA5LEUsSSwGHcSBScSFLAIZxImVoEksCdWJVB2dyZWVuJXNxIyhoB29xJH1xJShoA0tlaAtHVLJJrSWUw31oDF1xJmgOSwBLZUsBh3EnUnEoSwCGcSlhaBJLAnViVQNyZWRxKk51aAtOdWIu"))
+        self.assertEqual(nodeset, NodeSet("blue[6-10,13,15,17],green[0-100],red,yellow4"))
+        self.assertEqual(str(nodeset), "blue[6-10,13,15,17],green[0-100],red,yellow4")
+        self.assertEqual(len(nodeset), 111)
+        self.assertEqual(nodeset[0], "blue6")
+        self.assertEqual(nodeset[1], "blue7")
+        self.assertEqual(nodeset[-1], "yellow4")
+
+    def test_unpickle_v1_5_py24(self):
+        """test NodeSet unpickling (against v1.5/py24)"""
+        nodeset = pickle.loads(binascii.a2b_base64("gAJjQ2x1c3RlclNoZWxsLk5vZGVTZXQKTm9kZVNldApxACmBcQF9cQIoVQdfbGVuZ3RocQNLAFUJX3BhdHRlcm5zcQR9cQUoVQh5ZWxsb3clc3EGKGNDbHVzdGVyU2hlbGwuTm9kZVNldApSYW5nZVNldApxB29xCH1xCihoA0sBVQlfYXV0b3N0ZXBxC0dUskmtJZTDfVUHX3Jhbmdlc3EMXXENSwRLBUsBh3EOSwCGcQ9hVQhfdmVyc2lvbnEQSwJ1YlUGYmx1ZSVzcREoaAdvcRJ9cRMoaANLCGgLR1SySa0llMN9aAxdcRQoSwZLC0sBh3EVSwCGcRZLDUsOSwGHcRdLAIZxGEsPSxBLAYdxGUsAhnEaSxFLEksBh3EbSwCGcRxlaBBLAnViVQdncmVlbiVzcR0oaAdvcR59cR8oaANLZWgLR1SySa0llMN9aAxdcSBLAEtlSwGHcSFLAIZxImFoEEsCdWJVA3JlZHEjTnVoC051Yi4="))
+        self.assertEqual(nodeset, NodeSet("blue[6-10,13,15,17],green[0-100],red,yellow4"))
+        self.assertEqual(str(nodeset), "blue[6-10,13,15,17],green[0-100],red,yellow4")
+        self.assertEqual(len(nodeset), 111)
+        self.assertEqual(nodeset[0], "blue6")
+        self.assertEqual(nodeset[1], "blue7")
+        self.assertEqual(nodeset[-1], "yellow4")
+
+    def test_unpickle_v1_5_py26(self):
+        """test NodeSet unpickling (against v1.5/py26)"""
+        nodeset = pickle.loads(binascii.a2b_base64("gAJjQ2x1c3RlclNoZWxsLk5vZGVTZXQKTm9kZVNldApxACmBcQF9cQIoVQdfbGVuZ3RocQNLAFUJX3BhdHRlcm5zcQR9cQUoVQh5ZWxsb3clc3EGKGNDbHVzdGVyU2hlbGwuTm9kZVNldApSYW5nZVNldApxB29xCH1xCihoA0sBVQlfYXV0b3N0ZXBxC0dUskmtJZTDfVUHX3Jhbmdlc3EMXXENY19fYnVpbHRpbl9fCnNsaWNlCnEOSwRLBUsBh3EPUnEQSwCGcRFhVQhfdmVyc2lvbnESSwJ1YlUGYmx1ZSVzcRMoaAdvcRR9cRUoaANLCGgLR1SySa0llMN9aAxdcRYoaA5LBksLSwGHcRdScRhLAIZxGWgOSw1LDksBh3EaUnEbSwCGcRxoDksPSxBLAYdxHVJxHksAhnEfaA5LEUsSSwGHcSBScSFLAIZxImVoEksCdWJVB2dyZWVuJXNxIyhoB29xJH1xJShoA0tlaAtHVLJJrSWUw31oDF1xJmgOSwBLZUsBh3EnUnEoSwCGcSlhaBJLAnViVQNyZWRxKk51aAtOdWIu"))
+        self.assertEqual(nodeset, NodeSet("blue[6-10,13,15,17],green[0-100],red,yellow4"))
+        self.assertEqual(str(nodeset), "blue[6-10,13,15,17],green[0-100],red,yellow4")
+        self.assertEqual(len(nodeset), 111)
+        self.assertEqual(nodeset[0], "blue6")
+        self.assertEqual(nodeset[1], "blue7")
+        self.assertEqual(nodeset[-1], "yellow4")
+
+    def test_unpickle_v1_6_py24(self):
+        """test NodeSet unpickling (against v1.6/py24)"""
+        nodeset = pickle.loads(binascii.a2b_base64("gAJjQ2x1c3RlclNoZWxsLk5vZGVTZXQKTm9kZVNldApxACmBcQF9cQIoVQdfbGVuZ3RocQNLAFUJX3BhdHRlcm5zcQR9cQUoVQh5ZWxsb3clc3EGY0NsdXN0ZXJTaGVsbC5SYW5nZVNldApSYW5nZVNldApxB1UBNHEIhXEJUnEKfXELKFUHcGFkZGluZ3EMTlUJX2F1dG9zdGVwcQ1HVLJJrSWUw31VCF92ZXJzaW9ucQ5LA3ViVQZibHVlJXNxD2gHVQ02LTEwLDEzLDE1LDE3cRCFcRFScRJ9cRMoaAxOaA1HVLJJrSWUw31oDksDdWJVB2dyZWVuJXNxFGgHVQUwLTEwMHEVhXEWUnEXfXEYKGgMTmgNR1SySa0llMN9aA5LA3ViVQNyZWRxGU51aA1OdWIu"))
+        self.assertEqual(nodeset, NodeSet("blue[6-10,13,15,17],green[0-100],red,yellow4"))
+        self.assertEqual(str(nodeset), "blue[6-10,13,15,17],green[0-100],red,yellow4")
+        self.assertEqual(len(nodeset), 111)
+        self.assertEqual(nodeset[0], "blue6")
+        self.assertEqual(nodeset[1], "blue7")
+        self.assertEqual(nodeset[-1], "yellow4")
+
+    def test_unpickle_v1_6_py26(self):
+        """test NodeSet unpickling (against v1.6/py26)"""
+        nodeset = pickle.loads(binascii.a2b_base64("gAJjQ2x1c3RlclNoZWxsLk5vZGVTZXQKTm9kZVNldApxACmBcQF9cQIoVQdfbGVuZ3RocQNLAFUJX3BhdHRlcm5zcQR9cQUoVQh5ZWxsb3clc3EGY0NsdXN0ZXJTaGVsbC5SYW5nZVNldApSYW5nZVNldApxB1UBNHEIhXEJUnEKfXELKFUHcGFkZGluZ3EMTlUJX2F1dG9zdGVwcQ1HVLJJrSWUw31VCF92ZXJzaW9ucQ5LA3ViVQZibHVlJXNxD2gHVQ02LTEwLDEzLDE1LDE3cRCFcRFScRJ9cRMoaAxOaA1HVLJJrSWUw31oDksDdWJVB2dyZWVuJXNxFGgHVQUwLTEwMHEVhXEWUnEXfXEYKGgMTmgNR1SySa0llMN9aA5LA3ViVQNyZWRxGU51aA1OdWIu"))
+        self.assertEqual(nodeset, NodeSet("blue[6-10,13,15,17],green[0-100],red,yellow4"))
+        self.assertEqual(str(nodeset), "blue[6-10,13,15,17],green[0-100],red,yellow4")
+        self.assertEqual(len(nodeset), 111)
+        self.assertEqual(nodeset[0], "blue6")
+        self.assertEqual(nodeset[1], "blue7")
+        self.assertEqual(nodeset[-1], "yellow4")
+
+    def test_pickle_current(self):
+        """test NodeSet pickling (current version)"""
         dump = pickle.dumps(NodeSet("foo[1-100]"))
         self.assertNotEqual(dump, None)
         nodeset = pickle.loads(dump)
@@ -1248,6 +1350,30 @@ class NodeSetTest(unittest.TestCase):
         self.assertEqual(nodeset[0], "foo1")
         self.assertEqual(nodeset[1], "foo2")
         self.assertEqual(nodeset[-1], "foo100")
+
+    def testNodeSetBase(self):
+        """test underlying NodeSetBase class"""
+        rset = RangeSet("1-100,200")
+        self.assertEqual(len(rset), 101)
+        nsb = NodeSetBase("foo%sbar", rset) 
+        self.assertEqual(len(nsb), len(rset))
+        self.assertEqual(str(nsb), "foo[1-100,200]bar")
+        nsbcpy = nsb.copy()
+        self.assertEqual(len(nsbcpy), 101)
+        self.assertEqual(str(nsbcpy), "foo[1-100,200]bar")
+        other = NodeSetBase("foo%sbar", RangeSet("201"))
+        nsbcpy.add(other)
+        self.assertEqual(len(nsb), 101)
+        self.assertEqual(str(nsb), "foo[1-100,200]bar")
+        self.assertEqual(len(nsbcpy), 102)
+        self.assertEqual(str(nsbcpy), "foo[1-100,200-201]bar")
+
+    def testNodeGroupBase(self):
+        """test underlying NodeGroupBase class"""
+        ngb = NodeGroupBase("@group")
+        self.assertEqual(len(ngb), 1)
+        self.assertEqual(str(ngb), "@group")
+        self.assertRaises(ValueError, NodeGroupBase, "badgroup")
 
 
 if __name__ == '__main__':

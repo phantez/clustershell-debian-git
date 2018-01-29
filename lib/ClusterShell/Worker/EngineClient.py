@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2009, 2010, 2011)
+# Copyright CEA/DAM/DIF (2009, 2010, 2011, 2012)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -29,8 +29,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id$
 
 """
 EngineClient
@@ -41,12 +39,13 @@ An engine client is similar to a process, you can start/stop it, read data from
 it and write data to it.
 """
 
-import fcntl
+import errno
 import os
 import Queue
 import thread
 
-from fastsubprocess import Popen, PIPE, STDOUT, set_nonblock_flag
+from ClusterShell.Worker.fastsubprocess import Popen, PIPE, STDOUT, \
+    set_nonblock_flag
 
 from ClusterShell.Engine.Engine import EngineBaseTimer
 
@@ -203,15 +202,21 @@ class EngineClient(EngineBaseTimer):
         event indicating that a write can be performed now.
         """
         if len(self._wbuf) > 0:
-            # write syscall
-            c = os.write(self.fd_writer, self._wbuf)
-            # dequeue written buffer
-            self._wbuf = self._wbuf[c:]
-            # check for possible ending
-            if self._weof and not self._wbuf:
-                self._close_writer()
-            else:
-                self._set_writing()
+            try:
+                wcnt = os.write(self.fd_writer, self._wbuf)
+            except OSError, exc:
+                if (exc.errno == errno.EAGAIN):
+                    self._set_writing()
+                    return
+                raise
+            if wcnt > 0:
+                # dequeue written buffer
+                self._wbuf = self._wbuf[wcnt:]
+                # check for possible ending
+                if self._weof and not self._wbuf:
+                    self._close_writer()
+                else:
+                    self._set_writing()
     
     def _exec_nonblock(self, commandlist, shell=False, env=None):
         """
@@ -294,13 +299,13 @@ class EngineClient(EngineBaseTimer):
         """
         fd = self.fd_writer
         if fd:
-            # TODO: write now if ready
             self._wbuf += buf
-            self._set_writing()
+            # give it a try now (will set writing flag anyhow)
+            self._handle_write()
         else:
             # bufferize until pipe is ready
             self._wbuf += buf
-    
+
     def _set_write_eof(self):
         self._weof = True
         if not self._wbuf:
@@ -386,7 +391,7 @@ class EnginePort(EngineClient):
                 while not self._msgq.empty():
                     pmsg = self._msgq.get(block=False)
                     self.task.info("print_debug")(self.task,
-                        "EnginePort: dropped msg: %s" % pmsg.get())
+                        "EnginePort: dropped msg: %s" % str(pmsg.get()))
             except Queue.Empty:
                 pass
         self._msgq = None
@@ -401,7 +406,7 @@ class EnginePort(EngineClient):
         event indicating that a read is available.
         """
         readbuf = self._read(4096)
-        for c in readbuf:
+        for dummy_char in readbuf:
             # raise Empty if empty (should never happen)
             pmsg = self._msgq.get(block=False)
             self.eh.ev_msg(self, pmsg.get())

@@ -7,9 +7,9 @@ compute advanced nodeset operations
 -----------------------------------
 
 :Author: Stephane Thiell, CEA DAM  <stephane.thiell@cea.fr>
-:Date:   2011-06-09
+:Date:   2012-03-31
 :Copyright: CeCILL-C V1
-:Version: 1.5.1
+:Version: 1.6
 :Manual section: 1
 :Manual group: ClusterShell User Manual
 
@@ -22,9 +22,12 @@ SYNOPSIS
 
 DESCRIPTION
 ===========
-The ``nodeset`` command is an utility command provided with the ClusterShell
-library which implements some features of the NodeSet and RangeSet classes.
-It provides easy manipulation of indexed cluster nodes and node groups.
+``nodeset`` is an utility command provided with the ClusterShell library which
+implements some features of ClusterShell's NodeSet and RangeSet Python classes.
+It provides easy manipulation of indexed cluster nodes and node groups. It is
+automatically bound to the library node group resolution mechanism. Thus,
+``nodeset`` is especially useful to enhance cluster aware administration shell
+scripts.
 
 OPTIONS
 =======
@@ -36,10 +39,10 @@ OPTIONS
 
   Commands:
     -c, --count         show number of nodes in nodeset(s)
-    -e, --expand        expand nodeset(s) to separate nodes
+    -e, --expand        expand nodeset(s) to separate nodes (see also -S *SEPARATOR*)
     -f, --fold          fold nodeset(s) (or separate nodes) into one nodeset
-    -l, --list          list node groups, followed by corresponding nodes when specified two times (``-ll``), and also nodes count when specified three times (``-lll``). See also -s GROUPSOURCE.
-    -r, --regroup       fold nodes using node groups (see -s GROUPSOURCE)
+    -l, --list          list node groups, list node groups and nodes (``-ll``) or list node groups, nodes and node count (``-lll``). When no argument is specified at all, this command will list all node group names found in selected group source (see also -s *GROUPSOURCE*). If any nodesets are specified as argument, this command will find node groups these nodes belongs to (individually). Optionally for each group, the fraction of these nodes being member of the group may be displayed (with ``-ll``), and also member count/total group node count (with ``-lll``). If a single hyphen-minus (-) is given as a nodeset, it will be read from standard input.
+    -r, --regroup       fold nodes using node groups (see -s *GROUPSOURCE*)
     --groupsources      list all configured group sources (see ``groups.conf``\(5))
 
   Operations:
@@ -65,6 +68,7 @@ OPTIONS
     -I SLICE_RANGESET, --slice=SLICE_RANGESET
                         return sliced off result; examples of SLICE_RANGESET are "0" for simple index selection, or "1-9/2,16" for complex rangeset selection
     --split=MAXSPLIT    split result into a number of subsets
+    --contiguous        split result into contiguous subsets (ie. for nodeset, subsets will contain nodes with same pattern name and a contiguous range of indexes, like foobar[1-100]; for rangeset, subsets with consists in contiguous index ranges)"""
 
 
 For a short explanation of these options, see ``-h, --help``.
@@ -75,7 +79,7 @@ standard input.
 EXTENDED PATTERNS
 =================
 
-The ``nodeset`` command benefits from ClusterShell 1.3 NodeSet basic
+The ``nodeset`` command benefits from ClusterShell NodeSet basic
 arithmetic addition. This feature extends recognized string patterns by
 supporting operators matching all Operations seen previously. String
 patterns are read from left to right, by proceeding any character
@@ -145,6 +149,11 @@ Folding nodesets
   
   | node[0-7,32-163]
 
+  :$ echo node3 node6 node1 node2 node7 node5 | nodeset -f:
+
+  | node[1-3,5-7]
+
+
 Expanding nodesets
   :$ nodeset -e node[160-163]:
 
@@ -164,6 +173,19 @@ Computing nodesets symmetric difference (xor)
   :$ nodeset -f node[33-159] --xor node[32-33,156-159]:
 
   | node[32,34-155]
+
+Splitting nodes into several nodesets (expanding results)
+  :$ nodeset -e --split=3 node[1-9]:
+
+  | node1 node2 node3
+  | node4 node5 node6
+  | node7 node8 node9
+
+Splitting non-contiguous nodesets (folding results)
+  :$ nodeset -f --contiguous node2 node3 node4 node8 node9:
+
+  | node[2-4]
+  | node[8-9]
 
 
 HISTORY
@@ -191,5 +213,5 @@ BUG REPORTS
 ===========
 
 Use the following URL to submit a bug report or feedback:
-  http://sourceforge.net/apps/trac/clustershell/report
+  https://github.com/cea-hpc/clustershell/issues
 
