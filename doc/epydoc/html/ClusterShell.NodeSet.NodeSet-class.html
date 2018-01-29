@@ -1,0 +1,800 @@
+<?xml version="1.0" encoding="ascii"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+          "DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>ClusterShell.NodeSet.NodeSet</title>
+  <link rel="stylesheet" href="epydoc.css" type="text/css" />
+  <script type="text/javascript" src="epydoc.js"></script>
+</head>
+
+<body bgcolor="white" text="black" link="blue" vlink="#204080"
+      alink="#204080">
+<!-- ==================== NAVIGATION BAR ==================== -->
+<table class="navbar" border="0" width="100%" cellpadding="0"
+       bgcolor="#a0c0ff" cellspacing="0">
+  <tr valign="middle">
+
+  <!-- Tree link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="module-tree.html">Trees</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Index link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="identifier-index.html">Indices</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Help link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Project homepage -->
+      <th class="navbar" align="right" width="100%">
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr><th class="navbar" align="center"
+            ><a class="navbar" target="_top" href="http://clustershell.sourceforge.net">ClusterShell</a></th>
+          </tr></table></th>
+  </tr>
+</table>
+<table width="100%" cellpadding="0" cellspacing="0">
+  <tr valign="top">
+    <td width="100%">
+      <span class="breadcrumbs">
+        <a href="ClusterShell-module.html">Package&nbsp;ClusterShell</a> ::
+        <a href="ClusterShell.NodeSet-module.html">Module&nbsp;NodeSet</a> ::
+        Class&nbsp;NodeSet
+      </span>
+    </td>
+    <td>
+      <table cellpadding="0" cellspacing="0">
+        <!-- hide/show private -->
+        <tr><td align="right"><span class="options">[<a href="javascript:void(0);" class="privatelink"
+    onclick="toggle_private();">hide&nbsp;private</a>]</span></td></tr>
+        <tr><td align="right"><span class="options"
+            >[<a href="frames.html" target="_top">frames</a
+            >]&nbsp;|&nbsp;<a href="ClusterShell.NodeSet.NodeSet-class.html"
+            target="_top">no&nbsp;frames</a>]</span></td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- ==================== CLASS DESCRIPTION ==================== -->
+<h1 class="epydoc">Class NodeSet</h1><p class="nomargin-top"><span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet">source&nbsp;code</a></span></p>
+<center>
+<center>  <map id="uml_class_diagram_for_clusters_18" name="uml_class_diagram_for_clusters_18">
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#__init__" title="Initialize a NodeSet." alt="" coords="17,377,496,396"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#fromlist" title="Class method that returns a new NodeSet with nodes from provided list." alt="" coords="17,396,496,415"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#fromall" title="Class method that returns a new NodeSet with all nodes from optional &#160;groupsource." alt="" coords="17,415,496,433"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#__getstate__" title="Called when pickling: remove references to group resolver." alt="" coords="17,433,496,452"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#__setstate__" title="Called when unpickling: restore parser using non group resolver." alt="" coords="17,452,496,471"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#regroup" title="Regroup nodeset using groups." alt="" coords="17,471,496,489"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#issubset" title="Report whether another nodeset contains this nodeset." alt="" coords="17,489,496,508"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#issuperset" title="Report whether this nodeset contains another nodeset." alt="" coords="17,508,496,527"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#__getslice__" title="Return the slice from index i to index j&#45;1." alt="" coords="17,527,496,545"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#split" title="Split the nodeset into nbr sub&#45;nodeset." alt="" coords="17,545,496,564"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#update" title="s.update(t) returns nodeset s with elements added from t." alt="" coords="17,564,496,583"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#intersection_update" title="s.intersection_update(t) returns nodeset s keeping only elements also found in t." alt="" coords="17,583,496,601"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#difference_update" title="s.difference_update(t) returns nodeset s after removing elements found in &#160;t." alt="" coords="17,601,496,620"/>
+<area shape="rect" id="node64" href="ClusterShell.NodeSet.NodeSet-class.html#symmetric_difference_update" title="s.symmetric_difference_update(t) returns nodeset s keeping all nodes that &#160;are in exactly one of the nodesets." alt="" coords="17,620,496,639"/>
+<area shape="rect" id="node1" href="ClusterShell.NodeSet.NodeSet-class.html" title="Iterable class of nodes with node ranges support." alt="" coords="5,345,507,645"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#__iter__" title="Iterator on single nodes as string." alt="" coords="181,39,332,57"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#__len__" title="Get the number of nodes in NodeSet." alt="" coords="181,57,332,76"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#__str__" title="Get ranges&#45;based pattern of node list." alt="" coords="181,76,332,95"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#__contains__" title="Is node contained in NodeSet ?" alt="" coords="181,95,332,113"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#__eq__" title="NodeSet equality comparison." alt="" coords="181,113,332,132"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#__le__" title="Report whether another nodeset contains this nodeset." alt="" coords="181,132,332,151"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#__ge__" title="Report whether this nodeset contains another nodeset." alt="" coords="181,151,332,169"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#__lt__" title="x&lt;y" alt="" coords="181,169,332,188"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#__gt__" title="x&gt;y" alt="" coords="181,188,332,207"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#__getitem__" title="Return the node at index i." alt="" coords="181,207,332,225"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#union" title="s.union(t) returns a new set with elements from both s and t." alt="" coords="181,225,332,244"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#__or__" title="Implements the | operator." alt="" coords="181,244,332,263"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#add" title="Add node to NodeSet." alt="" coords="181,263,332,281"/>
+<area shape="rect" id="node65" href="ClusterShell.NodeSet.NodeSetBase-class.html#__ixor__" title="Implement the ^= operator." alt="" coords="181,300,332,319"/>
+<area shape="rect" id="node2" href="ClusterShell.NodeSet.NodeSetBase-class.html" title="Base class for NodeSet." alt="" coords="169,6,343,325"/>
+</map>
+  <img src="uml_class_diagram_for_clusters_18.png" alt='' usemap="#uml_class_diagram_for_clusters_18" ismap="ismap" class="graph-without-title" />
+</center>
+</center>
+<hr />
+<p>Iterable class of nodes with node ranges support.</p>
+  <p>NodeSet creation examples:</p>
+<pre class="py-doctest">
+<span class="py-prompt">&gt;&gt;&gt; </span>nodeset = NodeSet()               <span class="py-comment"># empty NodeSet</span>
+<span class="py-prompt">&gt;&gt;&gt; </span>nodeset = NodeSet(<span class="py-string">&quot;cluster3&quot;</span>)     <span class="py-comment"># contains only cluster3</span>
+<span class="py-prompt">&gt;&gt;&gt; </span>nodeset = NodeSet(<span class="py-string">&quot;cluster[5,10-42]&quot;</span>)
+<span class="py-prompt">&gt;&gt;&gt; </span>nodeset = NodeSet(<span class="py-string">&quot;cluster[0-10/2]&quot;</span>)
+<span class="py-prompt">&gt;&gt;&gt; </span>nodeset = NodeSet(<span class="py-string">&quot;cluster[0-10/2],othername[7-9,120-300]&quot;</span>)</pre>
+  <p>NodeSet provides methods like update(), intersection_update() or 
+  difference_update() methods, which conform to the Python Set API. 
+  However, unlike RangeSet or standard Set, NodeSet is somewhat not so 
+  strict for convenience, and understands NodeSet instance or NodeSet 
+  string as argument. Also, there is no strict definition of one element, 
+  for example, it IS allowed to do: &gt;&gt;&gt; 
+  nodeset.remove(&quot;blue[36-40]&quot;).</p>
+
+<!-- ==================== INSTANCE METHODS ==================== -->
+<a name="section-InstanceMethods"></a>
+<table class="summary" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Instance Methods</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-InstanceMethods"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="ClusterShell.NodeSet.NodeSet-class.html#__init__" class="summary-sig-name">__init__</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">nodes</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">autostep</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">resolver</span>=<span class="summary-sig-default">None</span>)</span><br />
+      Initialize a NodeSet.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.__init__">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="__getstate__"></a><span class="summary-sig-name">__getstate__</span>(<span class="summary-sig-arg">self</span>)</span><br />
+      Called when pickling: remove references to group resolver.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.__getstate__">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="__setstate__"></a><span class="summary-sig-name">__setstate__</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">dict</span>)</span><br />
+      Called when unpickling: restore parser using non group resolver.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.__setstate__">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr class="private">
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="_find_groups"></a><span class="summary-sig-name">_find_groups</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">node</span>,
+        <span class="summary-sig-arg">namespace</span>,
+        <span class="summary-sig-arg">allgroups</span>)</span><br />
+      Find groups of node by namespace.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet._find_groups">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="regroup"></a><span class="summary-sig-name">regroup</span>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">groupsource</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">autostep</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">overlap</span>=<span class="summary-sig-default">False</span>,
+        <span class="summary-sig-arg">noprefix</span>=<span class="summary-sig-default">False</span>)</span><br />
+      Regroup nodeset using groups.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.regroup">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="ClusterShell.NodeSet.NodeSet-class.html#issubset" class="summary-sig-name">issubset</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">other</span>)</span><br />
+      Report whether another nodeset contains this nodeset.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.issubset">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="ClusterShell.NodeSet.NodeSet-class.html#issuperset" class="summary-sig-name">issuperset</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">other</span>)</span><br />
+      Report whether this nodeset contains another nodeset.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.issuperset">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="ClusterShell.NodeSet.NodeSet-class.html#__getslice__" class="summary-sig-name">__getslice__</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">i</span>,
+        <span class="summary-sig-arg">j</span>)</span><br />
+      Return the slice from index i to index j-1.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.__getslice__">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="ClusterShell.NodeSet.NodeSet-class.html#split" class="summary-sig-name">split</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">nbr</span>)</span><br />
+      Split the nodeset into nbr sub-nodeset.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.split">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="ClusterShell.NodeSet.NodeSet-class.html#update" class="summary-sig-name">update</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">other</span>)</span><br />
+      s.update(t) returns nodeset s with elements added from t.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.update">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="ClusterShell.NodeSet.NodeSet-class.html#intersection_update" class="summary-sig-name">intersection_update</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">other</span>)</span><br />
+      s.intersection_update(t) returns nodeset s keeping only elements also
+      found in t.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.intersection_update">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="ClusterShell.NodeSet.NodeSet-class.html#difference_update" class="summary-sig-name">difference_update</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">other</span>,
+        <span class="summary-sig-arg">strict</span>=<span class="summary-sig-default">False</span>)</span><br />
+      s.difference_update(t) returns nodeset s after removing elements 
+      found in t.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.difference_update">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a href="ClusterShell.NodeSet.NodeSet-class.html#symmetric_difference_update" class="summary-sig-name">symmetric_difference_update</a>(<span class="summary-sig-arg">self</span>,
+        <span class="summary-sig-arg">other</span>)</span><br />
+      s.symmetric_difference_update(t) returns nodeset s keeping all nodes 
+      that are in exactly one of the nodesets.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.symmetric_difference_update">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" class="summary">
+    <p class="indent-wrapped-lines"><b>Inherited from <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html">NodeSetBase</a></code></b>:
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__and__">__and__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__contains__">__contains__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__eq__">__eq__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__ge__">__ge__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__getitem__">__getitem__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__gt__">__gt__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__iand__">__iand__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__ior__">__ior__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__isub__">__isub__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__iter__">__iter__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__ixor__">__ixor__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__le__">__le__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__len__">__len__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__lt__">__lt__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__or__">__or__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__str__">__str__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__sub__">__sub__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#__xor__">__xor__</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#add">add</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#clear">clear</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#difference">difference</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#intersection">intersection</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#remove">remove</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#symmetric_difference">symmetric_difference</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#union">union</a></code>
+      </p>
+    <div class="private">    <p class="indent-wrapped-lines"><b>Inherited from <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html">NodeSetBase</a></code></b> (private):
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#_add" onclick="show_private();">_add</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#_binary_sanity_check" onclick="show_private();">_binary_sanity_check</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#_iter" onclick="show_private();">_iter</a></code>,
+      <code><a href="ClusterShell.NodeSet.NodeSetBase-class.html#_iterbase" onclick="show_private();">_iterbase</a></code>
+      </p></div>
+    <p class="indent-wrapped-lines"><b>Inherited from <code>object</code></b>:
+      <code>__delattr__</code>,
+      <code>__format__</code>,
+      <code>__getattribute__</code>,
+      <code>__hash__</code>,
+      <code>__new__</code>,
+      <code>__reduce__</code>,
+      <code>__reduce_ex__</code>,
+      <code>__repr__</code>,
+      <code>__setattr__</code>,
+      <code>__sizeof__</code>,
+      <code>__subclasshook__</code>
+      </p>
+    </td>
+  </tr>
+</table>
+<!-- ==================== CLASS METHODS ==================== -->
+<a name="section-ClassMethods"></a>
+<table class="summary" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Class Methods</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-ClassMethods"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="fromlist"></a><span class="summary-sig-name">fromlist</span>(<span class="summary-sig-arg">cls</span>,
+        <span class="summary-sig-arg">nodelist</span>,
+        <span class="summary-sig-arg">autostep</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">resolver</span>=<span class="summary-sig-default">None</span>)</span><br />
+      Class method that returns a new NodeSet with nodes from provided 
+      list.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.fromlist">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+<tr>
+    <td width="15%" align="right" valign="top" class="summary">
+      <span class="summary-type">&nbsp;</span>
+    </td><td class="summary">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td><span class="summary-sig"><a name="fromall"></a><span class="summary-sig-name">fromall</span>(<span class="summary-sig-arg">cls</span>,
+        <span class="summary-sig-arg">groupsource</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">autostep</span>=<span class="summary-sig-default">None</span>,
+        <span class="summary-sig-arg">resolver</span>=<span class="summary-sig-default">None</span>)</span><br />
+      Class method that returns a new NodeSet with all nodes from optional 
+      groupsource.</td>
+          <td align="right" valign="top">
+            <span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.fromall">source&nbsp;code</a></span>
+            
+          </td>
+        </tr>
+      </table>
+      
+    </td>
+  </tr>
+</table>
+<!-- ==================== PROPERTIES ==================== -->
+<a name="section-Properties"></a>
+<table class="summary" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Properties</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-Properties"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+  <tr>
+    <td colspan="2" class="summary">
+    <p class="indent-wrapped-lines"><b>Inherited from <code>object</code></b>:
+      <code>__class__</code>
+      </p>
+    </td>
+  </tr>
+</table>
+<!-- ==================== METHOD DETAILS ==================== -->
+<a name="section-MethodDetails"></a>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr bgcolor="#70b0f0" class="table-header">
+  <td colspan="2" class="table-header">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr valign="top">
+        <td align="left"><span class="table-header">Method Details</span></td>
+        <td align="right" valign="top"
+         ><span class="options">[<a href="#section-MethodDetails"
+         class="privatelink" onclick="toggle_private();"
+         >hide private</a>]</span></td>
+      </tr>
+    </table>
+  </td>
+</tr>
+</table>
+<a name="__init__"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">__init__</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">nodes</span>=<span class="sig-default">None</span>,
+        <span class="sig-arg">autostep</span>=<span class="sig-default">None</span>,
+        <span class="sig-arg">resolver</span>=<span class="sig-default">None</span>)</span>
+    <br /><em class="fname">(Constructor)</em>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.__init__">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Initialize a NodeSet. The `nodes' argument may be a valid nodeset 
+  string or a NodeSet object. If no nodes are specified, an empty NodeSet 
+  is created.</p>
+  <dl class="fields">
+    <dt>Overrides:
+        object.__init__
+    </dt>
+  </dl>
+</td></tr></table>
+</div>
+<a name="issubset"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">issubset</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">other</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.issubset">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Report whether another nodeset contains this nodeset.</p>
+  <dl class="fields">
+    <dt>Overrides:
+        <a href="ClusterShell.NodeSet.NodeSetBase-class.html#issubset">NodeSetBase.issubset</a>
+    </dt>
+  </dl>
+</td></tr></table>
+</div>
+<a name="issuperset"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">issuperset</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">other</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.issuperset">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Report whether this nodeset contains another nodeset.</p>
+  <dl class="fields">
+    <dt>Overrides:
+        <a href="ClusterShell.NodeSet.NodeSetBase-class.html#issuperset">NodeSetBase.issuperset</a>
+    </dt>
+  </dl>
+</td></tr></table>
+</div>
+<a name="__getslice__"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">__getslice__</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">i</span>,
+        <span class="sig-arg">j</span>)</span>
+    <br /><em class="fname">(Slicling operator)</em>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.__getslice__">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Return the slice from index i to index j-1. For convenience only, not 
+  optimized as of version 1.0.</p>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="split"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">split</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">nbr</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.split">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>Split the nodeset into nbr sub-nodeset. Each sub-nodeset will have the
+  same number of element more or less 1. Current nodeset remains 
+  unmodified.</p>
+<pre class="py-doctest">
+<span class="py-prompt">&gt;&gt;&gt; </span>NodeSet(<span class="py-string">&quot;foo[1-5]&quot;</span>).split(3) 
+<span class="py-output">NodeSet(&quot;foo[1-2]&quot;)</span>
+<span class="py-output">NodeSet(&quot;foo[3-4]&quot;)</span>
+<span class="py-output">NodeSet(&quot;foo5&quot;)</span></pre>
+  <dl class="fields">
+  </dl>
+</td></tr></table>
+</div>
+<a name="update"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">update</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">other</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.update">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>s.update(t) returns nodeset s with elements added from t.</p>
+  <dl class="fields">
+    <dt>Overrides:
+        <a href="ClusterShell.NodeSet.NodeSetBase-class.html#update">NodeSetBase.update</a>
+    </dt>
+  </dl>
+</td></tr></table>
+</div>
+<a name="intersection_update"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">intersection_update</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">other</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.intersection_update">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>s.intersection_update(t) returns nodeset s keeping only elements also 
+  found in t.</p>
+  <dl class="fields">
+    <dt>Overrides:
+        <a href="ClusterShell.NodeSet.NodeSetBase-class.html#intersection_update">NodeSetBase.intersection_update</a>
+    </dt>
+  </dl>
+</td></tr></table>
+</div>
+<a name="difference_update"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">difference_update</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">other</span>,
+        <span class="sig-arg">strict</span>=<span class="sig-default">False</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.difference_update">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>s.difference_update(t) returns nodeset s after removing elements found
+  in t. If strict is True, raise KeyError if an element cannot be 
+  removed.</p>
+  <dl class="fields">
+    <dt>Overrides:
+        <a href="ClusterShell.NodeSet.NodeSetBase-class.html#difference_update">NodeSetBase.difference_update</a>
+    </dt>
+  </dl>
+</td></tr></table>
+</div>
+<a name="symmetric_difference_update"></a>
+<div>
+<table class="details" border="1" cellpadding="3"
+       cellspacing="0" width="100%" bgcolor="white">
+<tr><td>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr valign="top"><td>
+  <h3 class="epydoc"><span class="sig"><span class="sig-name">symmetric_difference_update</span>(<span class="sig-arg">self</span>,
+        <span class="sig-arg">other</span>)</span>
+  </h3>
+  </td><td align="right" valign="top"
+    ><span class="codelink"><a href="ClusterShell.NodeSet-pysrc.html#NodeSet.symmetric_difference_update">source&nbsp;code</a></span>&nbsp;
+    </td>
+  </tr></table>
+  
+  <p>s.symmetric_difference_update(t) returns nodeset s keeping all nodes 
+  that are in exactly one of the nodesets.</p>
+  <dl class="fields">
+    <dt>Overrides:
+        <a href="ClusterShell.NodeSet.NodeSetBase-class.html#symmetric_difference_update">NodeSetBase.symmetric_difference_update</a>
+    </dt>
+  </dl>
+</td></tr></table>
+</div>
+<br />
+<!-- ==================== NAVIGATION BAR ==================== -->
+<table class="navbar" border="0" width="100%" cellpadding="0"
+       bgcolor="#a0c0ff" cellspacing="0">
+  <tr valign="middle">
+
+  <!-- Tree link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="module-tree.html">Trees</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Index link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="identifier-index.html">Indices</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Help link -->
+      <th>&nbsp;&nbsp;&nbsp;<a
+        href="help.html">Help</a>&nbsp;&nbsp;&nbsp;</th>
+
+  <!-- Project homepage -->
+      <th class="navbar" align="right" width="100%">
+        <table border="0" cellpadding="0" cellspacing="0">
+          <tr><th class="navbar" align="center"
+            ><a class="navbar" target="_top" href="http://clustershell.sourceforge.net">ClusterShell</a></th>
+          </tr></table></th>
+  </tr>
+</table>
+<table border="0" cellpadding="0" cellspacing="0" width="100%%">
+  <tr>
+    <td align="left" class="footer">
+    Generated by Epydoc 3.0.1 on Tue Jul 27 21:53:18 2010
+    </td>
+    <td align="right" class="footer">
+      <a target="mainFrame" href="http://epydoc.sourceforge.net"
+        >http://epydoc.sourceforge.net</a>
+    </td>
+  </tr>
+</table>
+
+<script type="text/javascript">
+  <!--
+  // Private objects are initially displayed (because if
+  // javascript is turned off then we want them to be
+  // visible); but by default, we want to hide them.  So hide
+  // them unless we have a cookie that says to show them.
+  checkCookie();
+  // -->
+</script>
+</body>
+</html>
