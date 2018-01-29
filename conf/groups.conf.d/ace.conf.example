@@ -13,20 +13,6 @@
 #   prod-[0001-0144]
 #
 [ace]
-map: cd /acefs/servers; for s in server-*; do [[ $(cat $s/type) == $GROUP && -f $s/host/name ]] && cat $s/host/name; done || true
-all: cat /acefs/servers/server-*/host/name
-list: cd /acefs/servers; for s in server-*; do [ -f $s/host/name ] && cat $s/type; done | sort -u
-
-# ACE @server -> host
-#
-# server is the permanent node name used by ACE
-# host is the dynamic/current cluster node name
-#
-# example:
-#   $ nodeset -Gs ace-servers -r prod-0038
-#   @server-0042
-#
-[ace-servers]
-map: [ -f /acefs/servers/$GROUP/host/name ] && cat /acefs/servers/$GROUP/host/name
-all: cat /acefs/servers/server-*/host/name
-list: cd /acefs/servers; for s in server-*; do [ -f $s/host/name ] && echo $s; done || true
+map:  ace servers | awk '/$GROUP/ {gsub("*",""); print $11}'
+all:  ace servers | awk '!/Type/ && $11 != "-" {gsub("*",""); print $11}'
+list: ace servers | awk '!/Type/ && $11 != "-" {print $2}'

@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2011-2015)
+# Copyright CEA/DAM/DIF (2011-2016)
 #  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #
 # This file is part of the ClusterShell library.
@@ -34,6 +34,7 @@
 ClusterShell v2 tree propagation worker
 """
 
+import base64
 import logging
 import os
 from os.path import basename, dirname, isfile, normpath
@@ -67,8 +68,6 @@ class MetaWorkerEventHandler(EventHandler):
         """
         Called to indicate that a worker has data to read.
         """
-        self.logger.debug("MetaWorkerEventHandler: ev_read (%s)",
-                          worker.current_sname)
         self.metaworker._on_node_msgline(worker.current_node,
                                          worker.current_msg,
                                          'stdout')
@@ -88,7 +87,8 @@ class MetaWorkerEventHandler(EventHandler):
         metaworker = self.metaworker
         metaworker.current_node = node
         metaworker.current_sname = sname
-        metaworker.eh.ev_written(metaworker, node, sname, size)
+        if metaworker.eh:
+            metaworker.eh.ev_written(metaworker, node, sname, size)
 
     def ev_hup(self, worker):
         """
@@ -116,10 +116,8 @@ class MetaWorkerEventHandler(EventHandler):
         """
         self.logger.debug("MetaWorkerEventHandler: ev_close")
         self.metaworker._check_fini()
-        ##print >>sys.stderr, "ev_close?"
         #self._completed += 1
         #if self._completed >= self.grpcount:
-        #    #print >>sys.stderr, "ev_close!"
         #    metaworker = self.metaworker
         #    metaworker.eh.ev_close(metaworker)
 
@@ -129,7 +127,12 @@ class WorkerTree(DistantWorker):
     ClusterShell tree worker Class.
 
     """
-    UNTAR_CMD_FMT = 'tar -xf - -C "%s"'
+    # copy and rcopy tar command formats
+    # the choice of single or double quotes is essential
+    UNTAR_CMD_FMT = "tar -xf - -C '%s'"
+    TAR_CMD_FMT = "tar -cf - -C '%s' " \
+                  "--transform \"s,^\\([^/]*\\)[/]*,\\1.$(hostname -s)/,\" " \
+                  "'%s' | base64 -w 65536"
 
     def __init__(self, nodes, handler, timeout, **kwargs):
         """
@@ -144,6 +147,7 @@ class WorkerTree(DistantWorker):
         """
         DistantWorker.__init__(self, handler)
 
+        self.logger = logging.getLogger(__name__)
         self.workers = []
         self.nodes = NodeSet(nodes)
         self.timeout = timeout
@@ -152,23 +156,33 @@ class WorkerTree(DistantWorker):
         self.dest = kwargs.get('dest')
         autoclose = kwargs.get('autoclose', False)
         self.stderr = kwargs.get('stderr', False)
+        self.logger.debug("stderr=%s", self.stderr)
         self.remote = kwargs.get('remote', True)
+        self.preserve = kwargs.get('preserve', None)
+        self.reverse = kwargs.get('reverse', False)
+        self._rcopy_bufs = {}
+        self._rcopy_tars = {}
         self._close_count = 0
         self._start_count = 0
         self._child_count = 0
         self._target_count = 0
         self._has_timeout = False
-        self.logger = logging.getLogger(__name__)
 
         if self.command is None and self.source is None:
             raise ValueError("missing command or source parameter in "
                              "WorkerTree constructor")
 
+        # rcopy is enforcing separated stderr to handle tar error messages
+        # because stdout is used for data transfer
+        if self.source and self.reverse:
+            self.stderr = True
+
         # build gateway invocation command
         invoke_gw_args = []
-        for envname in ('PYTHONPATH', \
-                        'CLUSTERSHELL_GW_LOG_DIR', \
-                        'CLUSTERSHELL_GW_LOG_LEVEL'):
+        for envname in ('PYTHONPATH',
+                        'CLUSTERSHELL_GW_LOG_DIR',
+                        'CLUSTERSHELL_GW_LOG_LEVEL',
+                        'CLUSTERSHELL_GW_B64_LINE_LENGTH'):
             envval = os.getenv(envname)
             if envval:
                 invoke_gw_args.append("%s=%s" % (envname, envval))
@@ -184,6 +198,7 @@ class WorkerTree(DistantWorker):
             self.router = None
 
         self.upchannel = None
+
         self.metahandler = MetaWorkerEventHandler(self)
 
         # gateway -> active targets selection
@@ -212,19 +227,29 @@ class WorkerTree(DistantWorker):
         # Prepare copy params if source is defined
         destdir = None
         if self.source:
-            self.logger.debug("copy self.dest=%s", self.dest)
-            # Special processing to determine best arcname and destdir for tar.
-            # The only case that we don't support is when source is a file and
-            # dest is a dir without a finishing / (in that case we cannot
-            # determine remotely whether it is a file or a directory).
-            if isfile(self.source):
-                # dest is not normalized here
-                arcname = basename(self.dest) or basename(normpath(self.source))
-                destdir = dirname(self.dest)
+            if self.reverse:
+                self.logger.debug("rcopy source=%s, dest=%s", self.source,
+                                  self.dest)
+                # dest is a directory
+                destdir = self.dest
             else:
-                arcname = basename(normpath(self.source))
-                destdir = os.path.normpath(self.dest)
-            self.logger.debug("copy arcname=%s destdir=%s", arcname, destdir)
+                self.logger.debug("copy source=%s, dest=%s", self.source,
+                                  self.dest)
+                # Special processing to determine best arcname and destdir for
+                # tar. The only case that we don't support is when source is a
+                # file and dest is a dir without a finishing / (in that case we
+                # cannot determine remotely whether it is a file or a
+                # directory).
+                if isfile(self.source):
+                    # dest is not normalized here
+                    arcname = basename(self.dest) or \
+                              basename(normpath(self.source))
+                    destdir = dirname(self.dest)
+                else:
+                    arcname = basename(normpath(self.source))
+                    destdir = os.path.normpath(self.dest)
+                self.logger.debug("copy arcname=%s destdir=%s", arcname,
+                                  destdir)
 
         # And launch stuffs
         next_hops = self._distribute(self.task.info("fanout"), nodes.copy())
@@ -239,15 +264,18 @@ class WorkerTree(DistantWorker):
                 self._target_count += len(targets)
                 if self.remote:
                     if self.source:
-                        self.logger.debug('_launch remote untar (destdir=%s)',
-                                          destdir)
-                        self.command = self.UNTAR_CMD_FMT % destdir
-                        worker = self.task.shell(self.command,
-                                                 nodes=targets,
-                                                 timeout=self.timeout,
-                                                 handler=self.metahandler,
-                                                 stderr=self.stderr,
-                                                 tree=False)
+                        # Note: specific case where targets are not in topology
+                        # as self.source is never used on remote gateways
+                        # so we try a direct copy/rcopy:
+                        self.logger.debug('_launch copy r=%s source=%s dest=%s',
+                                          self.reverse, self.source, self.dest)
+                        worker = self.task.copy(self.source, self.dest, targets,
+                                                handler=self.metahandler,
+                                                stderr=self.stderr,
+                                                timeout=self.timeout,
+                                                preserve=self.preserve,
+                                                reverse=self.reverse,
+                                                tree=False)
                     else:
                         worker = self.task.shell(self.command,
                                                  nodes=targets,
@@ -271,13 +299,13 @@ class WorkerTree(DistantWorker):
                 self.logger.debug("trying gateway %s to reach %s", gw, targets)
                 if self.source:
                     self._copy_remote(self.source, destdir, targets, gw,
-                                      self.timeout)
+                                      self.timeout, self.reverse)
                 else:
                     self._execute_remote(self.command, targets, gw,
                                          self.timeout)
 
         # Copy mode: send tar data after above workers have been initialized
-        if self.source:
+        if self.source and not self.reverse:
             try:
                 # create temporary tar file with all source files
                 tmptar = tempfile.TemporaryFile()
@@ -306,16 +334,25 @@ class WorkerTree(DistantWorker):
                 distribution[gw] = dstset
         return distribution
 
-    def _copy_remote(self, source, dest, targets, gateway, timeout):
+    def _copy_remote(self, source, dest, targets, gateway, timeout, reverse):
         """run a remote copy in tree mode (using gateway)"""
-        self.logger.debug("_copy_remote gateway=%s source=%s dest=%s",
-                          gateway, source, dest)
+        self.logger.debug("_copy_remote gateway=%s source=%s dest=%s "
+                          "reverse=%s", gateway, source, dest, reverse)
 
         self._target_count += len(targets)
 
         self.gwtargets[gateway] = targets.copy()
 
-        cmd = self.UNTAR_CMD_FMT % dest
+        # tar commands are built here and launched on targets
+        if reverse:
+            # these weird replace calls aim to escape single quotes ' within ''
+            srcdir = dirname(source).replace("'", '\'\"\'\"\'')
+            srcbase = basename(normpath(self.source)).replace("'", '\'\"\'\"\'')
+            cmd = self.TAR_CMD_FMT % (srcdir, srcbase)
+        else:
+            cmd = self.UNTAR_CMD_FMT % dest.replace("'", '\'\"\'\"\'')
+
+        self.logger.debug('_copy_remote: tar cmd: %s', cmd)
 
         pchan = self.task._pchannel(gateway, self)
         pchan.shell(nodes=targets, command=cmd, worker=self, timeout=timeout,
@@ -344,17 +381,61 @@ class WorkerTree(DistantWorker):
         return []
 
     def _on_remote_node_msgline(self, node, msg, sname, gateway):
-        DistantWorker._on_node_msgline(self, node, msg, sname)
+        """remote msg received"""
+        if not self.source or not self.reverse or sname != 'stdout':
+            DistantWorker._on_node_msgline(self, node, msg, sname)
+            return
+
+        # rcopy only: we expect base64 encoded tar content on stdout
+        encoded = self._rcopy_bufs.setdefault(node, '') + msg
+        if node not in self._rcopy_tars:
+            self._rcopy_tars[node] = tempfile.TemporaryFile()
+
+        # partial base64 decoding requires a multiple of 4 characters
+        encoded_sz = (len(encoded) // 4) * 4
+        # write decoded binary msg to node temporary tarfile
+        self._rcopy_tars[node].write(base64.b64decode(encoded[0:encoded_sz]))
+        # keep trailing encoded chars for next time
+        self._rcopy_bufs[node] = encoded[encoded_sz:]
 
     def _on_remote_node_rc(self, node, rc, gateway):
+        """remote rc received"""
         DistantWorker._on_node_rc(self, node, rc)
         self.logger.debug("_on_remote_node_rc %s %s via gw %s", node,
                           self._close_count, gateway)
+
+        # finalize rcopy: extract tar data
+        if self.source and self.reverse:
+            for node, buf in self._rcopy_bufs.iteritems():
+                tarfileobj = self._rcopy_tars[node]
+                if len(buf) > 0:
+                    self.logger.debug("flushing node %s buf %d bytes", node,
+                                      len(buf))
+                    tarfileobj.write(buf)
+                tarfileobj.flush()
+                tarfileobj.seek(0)
+                try:
+                    tmptar = tarfile.open(fileobj=tarfileobj)
+                    try:
+                        self.logger.debug("%s extracting %d members in dest %s",
+                                          node, len(tmptar.getmembers()),
+                                          self.dest)
+                        tmptar.extractall(path=self.dest)
+                    except IOError, ex:
+                        self._on_remote_node_msgline(node, ex, 'stderr',
+                                                     gateway)
+                # note: try-except-finally not supported before python 2.5
+                finally:
+                    tmptar.close()
+            self._rcopy_bufs = {}
+            self._rcopy_tars = {}
+
         self.gwtargets[gateway].remove(node)
         self._close_count += 1
         self._check_fini(gateway)
 
     def _on_remote_node_timeout(self, node, gateway):
+        """remote node timeout received"""
         DistantWorker._on_node_timeout(self, node)
         self.logger.debug("_on_remote_node_timeout %s via gw %s", node, gateway)
         self._close_count += 1
@@ -392,9 +473,11 @@ class WorkerTree(DistantWorker):
         if gateway:
             targets = self.gwtargets[gateway]
             if not targets:
+                # no more active targets for this gateway
                 self.logger.debug("WorkerTree._check_fini %s call pchannel_"
                                   "release for gw %s", self, gateway)
                 self.task._pchannel_release(gateway, self)
+                del self.gwtargets[gateway]
 
     def write(self, buf):
         """Write to worker clients."""
@@ -405,7 +488,9 @@ class WorkerTree(DistantWorker):
                 worker.write(buf)
             except OSError, exc:
                 osexc = exc
+
         for gateway, targets in self.gwtargets.items():
+            assert len(targets) > 0
             self.task._pchannel(gateway, self).write(nodes=targets,
                                                      buf=buf,
                                                      worker=self)
@@ -421,6 +506,7 @@ class WorkerTree(DistantWorker):
         for worker in self.workers:
             worker.set_write_eof()
         for gateway, targets in self.gwtargets.items():
+            assert len(targets) > 0
             self.task._pchannel(gateway, self).set_write_eof(nodes=targets,
                                                              worker=self)
 

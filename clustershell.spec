@@ -1,14 +1,14 @@
 %{!?python_sitelib: %global python_sitelib %(%{__python} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")}
 
 Name:          clustershell
-Version:       1.7
+Version:       1.7.2
 Release:       1%{?dist}
 Summary:       Python framework for efficient cluster administration
 
 Group:         System Environment/Base
 License:       CeCILL-C
-URL:           http://clustershell.sourceforge.net/
-Source0:       http://downloads.sourceforge.net/%{name}/%{name}-%{version}.tar.gz
+URL:           http://cea-hpc.github.io/clustershell/
+Source0:       https://github.com/cea-hpc/%{name}/archive/v%{version}.tar.gz#/%{name}-%{version}.tar.gz
 BuildRoot:     %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 BuildArch:     noarch
 BuildRequires: python-devel python-setuptools
@@ -101,6 +101,12 @@ rm -rf %{buildroot}
 %{vimdatadir}/syntax/groupsconf.vim
 
 %changelog
+* Sat Jun 18 2016 Stephane Thiell <sthiell@stanford.edu> 1.7.2-1
+- update to 1.7.2
+
+* Mon Feb 29 2016 Stephane Thiell <sthiell@stanford.edu> 1.7.1-1
+- update to 1.7.1
+
 * Tue Nov 10 2015 Stephane Thiell <sthiell@stanford.edu> 1.7-1
 - update to 1.7
 

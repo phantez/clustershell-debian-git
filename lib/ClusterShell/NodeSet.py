@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2007-2015)
+# Copyright CEA/DAM/DIF (2007-2016)
 #  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #  Contributor: Aurelien DEGREMONT <aurelien.degremont@cea.fr>
 #
@@ -217,14 +217,14 @@ class NodeSetBase(object):
 
     def nsiter(self):
         """Object-based NodeSet iterator on single nodes."""
-        for pat, ivec, pad, autostep in self._iter():
+        for pat, ivec, pads, autostep in self._iter():
             nodeset = self.__class__()
             if ivec is not None:
                 if len(ivec) == 1:
-                    nodeset._add_new(pat, \
-                                     RangeSet.fromone(ivec[0], pad[0] or 0))
+                    pad = pads[0] or 0
+                    nodeset._add_new(pat, RangeSet.fromone(ivec[0], pad))
                 else:
-                    nodeset._add_new(pat, RangeSetND([ivec], None, autostep))
+                    nodeset._add_new(pat, RangeSetND([ivec], pads, autostep))
             else:
                 nodeset._add_new(pat, None)
             yield nodeset
@@ -922,9 +922,6 @@ class ParsingEngine(object):
 
     def _scan_string_single(self, nsstr, autostep):
         """Single node scan, returns (pat, list of rangesets)"""
-        if len(nsstr) == 0:
-            raise NodeSetParseError(nsstr, "empty node name")
-
         # single node parsing
         pfx_nd = [mobj.groups() for mobj in self.base_node_re.finditer(nsstr)]
         pfx_nd = pfx_nd[:-1]
@@ -964,7 +961,7 @@ class ParsingEngine(object):
     def _scan_string(self, nsstr, autostep):
         """Parsing engine's string scanner method (iterator)."""
         next_op_code = 'update'
-        while nsstr is not None:
+        while nsstr:
             # Ignore whitespace(s) for convenience
             nsstr = nsstr.lstrip()
 
@@ -1005,10 +1002,6 @@ class ParsingEngine(object):
 
                     pfxlen, sfxlen = len(pfx), len(sfx)
 
-                    # pfx + sfx cannot be empty
-                    if pfxlen + sfxlen == 0:
-                        raise NodeSetParseError(nsstr, "empty node name")
-
                     if sfxlen > 0:
                         # amending trailing digits generates /steps
                         sfx, rng = self._amend_trailing_digits(sfx, rng)
@@ -1016,10 +1009,10 @@ class ParsingEngine(object):
                     if pfxlen > 0:
                         # this method supports /steps
                         pfx, rng = self._amend_leading_digits(pfx, rng)
-
-                        # scan pfx as a single node (no bracket)
-                        pfx, pfxrvec = self._scan_string_single(pfx, autostep)
-                        rsets += pfxrvec
+                        if pfx:
+                            # scan any nonempty pfx as a single node (no bracket)
+                            pfx, pfxrvec = self._scan_string_single(pfx, autostep)
+                            rsets += pfxrvec
 
                     # readahead for sanity check
                     bracket_idx = sfx.find(self.BRACKET_OPEN,
@@ -1031,14 +1024,19 @@ class ParsingEngine(object):
                         raise NodeSetParseError(sfx, "empty node name before")
 
                     if len(sfx) > 0 and sfx[0] == '[':
-                        raise NodeSetParseError(sfx,
-                                                "illegal reopening bracket")
+                        msg = "illegal reopening bracket"
+                        raise NodeSetParseError(sfx, msg)
 
                     newpat += "%s%%s" % pfx
                     try:
                         rsets.append(RangeSet(rng, autostep))
                     except RangeSetParseError, ex:
                         raise NodeSetParseRangeError(ex)
+
+                    # the following test forbids fully numeric nodeset
+                    if len(pfx) + len(sfx) == 0:
+                        msg = "fully numeric nodeset"
+                        raise NodeSetParseError(nsstr, msg)
 
                 # Check if we have a next op-separated node or pattern
                 op_idx, next_op_code = self._next_op(sfx)
@@ -1058,11 +1056,6 @@ class ParsingEngine(object):
                     sfx, sfxrvec = self._scan_string_single(sfx, autostep)
                     newpat += sfx
                     rsets += sfxrvec
-
-                # pfx + sfx cannot be empty
-                if len(newpat) == 0:
-                    raise NodeSetParseError(nsstr, "empty node name")
-
             else:
                 # In this case, either there is no comma and no bracket,
                 # or the bracket is after the comma, then just return
@@ -1253,10 +1246,16 @@ class NodeSet(NodeSetBase):
         """Class method that returns a new NodeSet with all nodes from optional
         groupsource."""
         inst = NodeSet(autostep=autostep, resolver=resolver)
-        if not inst._resolver:
-            raise NodeSetExternalError("No node group resolver")
-        # Fill this nodeset with all nodes found by resolver
-        inst.updaten(inst._parser.all_nodes(groupsource))
+        try:
+            if not inst._resolver:
+                raise NodeSetExternalError("Group resolver is not defined")
+            else:
+                # fill this nodeset with all nodes found by resolver
+                inst.updaten(inst._parser.all_nodes(groupsource))
+        except NodeUtils.GroupResolverError, exc:
+            errmsg = "Group source error (%s: %s)" % (exc.__class__.__name__,
+                                                      exc)
+            raise NodeSetExternalError(errmsg)
         return inst
 
     def __getstate__(self):

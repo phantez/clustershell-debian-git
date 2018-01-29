@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2007-2015)
+# Copyright CEA/DAM/DIF (2007-2016)
 #  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #
 # This file is part of the ClusterShell library.
@@ -48,8 +48,8 @@ Please see first:
   - ClusterShell.Task
 """
 
-__version__ = '1.7'
+__version__ = '1.7.2'
 __version_info__ = tuple([ int(_n) for _n in __version__.split('.')])
-__date__    = '2015/11/10'
+__date__    = '2016/06/18'
 __author__  = 'Stephane Thiell <sthiell@stanford.edu>'
 __url__     = 'http://clustershell.readthedocs.org/'
