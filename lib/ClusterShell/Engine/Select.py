@@ -33,7 +33,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Select.py 454 2011-02-06 21:42:36Z st-cea $
+# $Id: Select.py 500 2011-05-29 16:18:05Z st-cea $
 
 """
 A select() based ClusterShell Engine.
@@ -123,7 +123,7 @@ class EngineSelect(Engine):
                 elif timeo == -1:
                     timeo = timeout
 
-                self.reg_clifds_changed = False
+                self._current_loopcnt += 1
                 if timeo >= 0:
                     r_ready, w_ready, x_ready = \
                         select.select(self._fds_r, self._fds_w, [], timeo)
@@ -143,18 +143,13 @@ class EngineSelect(Engine):
             # iterate over fd on which events occured
             for fd in set(r_ready) | set(w_ready):
 
-                if self.reg_clifds_changed:
-                    self._debug("REG CLIENTS CHANGED - Aborting current fdlist")
-                    # Oops, reconsider fdlist by calling select() again.
-                    break
-
                 # get client instance
                 client, fdev = self._fd2client(fd)
-                if not client or fdev is None:
+                if client is None:
                     continue
 
                 # process this client
-                client._processing = True
+                client._current_client = client
 
                 # check for possible unblocking read on this fd
                 if fd in r_ready:
@@ -195,7 +190,7 @@ class EngineSelect(Engine):
                     client._handle_write()
 
                 # post processing
-                client._processing = False
+                self._current_client = None
 
                 # apply any changes occured during processing
                 if client.registered:
