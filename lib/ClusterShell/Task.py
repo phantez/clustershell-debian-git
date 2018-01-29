@@ -1,6 +1,6 @@
 #
 # Copyright (C) 2007-2016 CEA/DAM
-# Copyright (C) 2015-2016 Stephane Thiell <sthiell@stanford.edu>
+# Copyright (C) 2015-2017 Stephane Thiell <sthiell@stanford.edu>
 #
 # This file is part of ClusterShell.
 #
@@ -42,7 +42,7 @@ Simple example of use:
 
 """
 
-from itertools import imap
+from __future__ import print_function
 import logging
 from operator import itemgetter
 import os
@@ -52,6 +52,11 @@ import threading
 from time import sleep
 import traceback
 
+try:
+    basestring
+except NameError:  # Python 3 compat
+    basestring = str
+
 from ClusterShell.Defaults import config_paths, DEFAULTS
 from ClusterShell.Defaults import _local_workerclass, _distant_workerclass
 from ClusterShell.Engine.Engine import EngineAbortException
@@ -59,9 +64,9 @@ from ClusterShell.Engine.Engine import EngineTimeoutException
 from ClusterShell.Engine.Engine import EngineAlreadyRunningError
 from ClusterShell.Engine.Engine import EngineTimer
 from ClusterShell.Engine.Factory import PreferredEngine
-from ClusterShell.Worker.EngineClient import EnginePort
+from ClusterShell.Worker.EngineClient import EnginePort, EngineClientError
 from ClusterShell.Worker.Popen import WorkerPopen
-from ClusterShell.Worker.Tree import WorkerTree
+from ClusterShell.Worker.Tree import TreeWorker
 from ClusterShell.Worker.Worker import FANOUT_UNLIMITED
 
 from ClusterShell.Event import EventHandler
@@ -157,14 +162,13 @@ class Task(object):
         >>> task.run("check_network.sh", nodes="tiger[1-20]", timeout=30)
 
     You can then either use Task's iter_keys_timeout() method after execution
-    to see on what nodes the command has timed out, or listen for ev_timeout()
-    events in your event handler.
+    to see on what nodes the command has timed out, or listen for ev_close()
+    events in your event handler and check the timedout boolean.
 
     To get command result, you can either use Task's iter_buffers() method for
     standard output, iter_errors() for standard error after command execution
     (common output contents are automatically gathered), or you can listen for
-    ev_read() and ev_error() events in your event handler and get live command
-    output.
+    ev_read() events in your event handler and get live command output.
 
     To get command return codes, you can either use Task's iter_retcodes(),
     node_retcode() and max_retcode() methods after command execution, or
@@ -350,7 +354,7 @@ class Task(object):
         raised and uncaught on Task thread, excepthook is called, which
         is default_excepthook by default. Once excepthook overriden,
         you can still call default_excepthook if needed."""
-        print >> sys.stderr, 'Exception in thread %s:' % self.thread
+        print('Exception in thread %s:' % self.thread, file=sys.stderr)
         traceback.print_exception(exc_type, exc_value, tb, file=sys.stderr)
 
     _excepthook = default_excepthook
@@ -444,6 +448,8 @@ class Task(object):
           - "stderr": Boolean value indicating whether to enable
             stdout/stderr separation when using task.shell(), if not
             specified explicitly (default: False).
+          - "stdin": Boolean value indicating whether to enable stdin when
+            using task.shell(), if not explicitly specified (default: True)
           - "stdout_msgtree": Whether to instantiate standard output
             MsgTree for automatic internal gathering of result messages
             coming from Workers (default: True).
@@ -537,17 +543,19 @@ class Task(object):
             aborted as soon as all other non-autoclosing task objects (workers,
             ports, timers) have finished -- default is False
           - stderr: separate stdout/stderr if set to True -- default is False.
+          - stdin: enable stdin if set to True or prevent its use otherwise --
+            default is True.
 
         Local usage::
             task.shell(command [, key=key] [, handler=handler]
                   [, timeout=secs] [, autoclose=enable_autoclose]
-                  [, stderr=enable_stderr])
+                  [, stderr=enable_stderr][, stdin=enable_stdin]))
 
         Distant usage::
             task.shell(command, nodes=nodeset [, handler=handler]
                   [, timeout=secs], [, autoclose=enable_autoclose]
                   [, tree=None|False|True] [, remote=False|True]
-                  [, stderr=enable_stderr])
+                  [, stderr=enable_stderr][, stdin=enable_stdin]))
 
         Example:
 
@@ -560,6 +568,7 @@ class Task(object):
         timeo = kwargs.get("timeout", None)
         autoclose = kwargs.get("autoclose", False)
         stderr = kwargs.get("stderr", self.default("stderr"))
+        stdin = kwargs.get("stdin", self.default("stdin"))
         remote = kwargs.get("remote", True)
 
         if kwargs.get("nodes", None):
@@ -575,7 +584,7 @@ class Task(object):
                     raise TaskError("tree mode required for distant shell "
                                     "command with unknown topology!")
                 # create tree worker
-                wrkcls = WorkerTree
+                wrkcls = TreeWorker
             elif not remote:
                 # create local worker
                 wrkcls = self.default('local_worker')
@@ -591,6 +600,12 @@ class Task(object):
             worker = WorkerPopen(command, key=kwargs.get("key", None),
                                  handler=handler, stderr=stderr,
                                  timeout=timeo, autoclose=autoclose)
+
+        if not stdin:
+            try:
+                worker.set_write_eof()  # prevent reading from stdin
+            except EngineClientError:   # not all workers support writing
+                pass
 
         # schedule worker for execution in this task
         self.schedule(worker)
@@ -619,7 +634,7 @@ class Task(object):
                                 "command with unknown topology!")
 
             # create tree worker
-            wrkcls = WorkerTree
+            wrkcls = TreeWorker
         else:
             # create a new copy worker
             wrkcls = self.default('distant_worker')
@@ -751,7 +766,7 @@ class Task(object):
                 self._run(self.timeout)
             except EngineTimeoutException:
                 raise TimeoutError()
-            except EngineAbortException, exc:
+            except EngineAbortException as exc:
                 self._terminate(exc.kill)
             except EngineAlreadyRunningError:
                 raise AlreadyRunningError("task engine is already running")
@@ -806,9 +821,9 @@ class Task(object):
 
         When used with a command, you can set a maximum delay of individual
         command execution with the help of the timeout parameter (see
-        Task.shell's parameters). You can then listen for ev_timeout() events
-        in your Worker event handlers, or use num_timeout() or
-        iter_keys_timeout() afterwards.
+        Task.shell's parameters). You can then listen for ev_close() events
+        and check the timedout boolean in your Worker event handlers, or use
+        num_timeout() or iter_keys_timeout() afterwards.
         But, when used as an alias to Task.resume(), the timeout parameter
         sets an hard limit of task execution time. In that case, a TimeoutError
         exception is raised if this delay is reached.
@@ -1009,6 +1024,8 @@ class Task(object):
         Add a worker return code (rc) that is coming from a node of a
         worker instance.
         """
+        assert rc is not None
+
         source = (worker, node)
 
         # store rc by source
@@ -1034,11 +1051,11 @@ class Task(object):
         msg = self._msgtree(sname).get((worker, node))
         if msg is None:
             return None
-        return str(msg)
+        return bytes(msg)
 
     def _call_tree_matcher(self, tree_match_func, match_keys=None, worker=None):
         """Call identified tree matcher (items, walk) method with options."""
-        if isinstance(match_keys, basestring): # change to str for Python 3
+        if isinstance(match_keys, basestring):  # change to str for Python 3
             raise TypeError("Sequence of keys/nodes expected for 'match_keys'.")
         # filter by worker and optionally by matching keys
         if worker and match_keys is None:
@@ -1060,7 +1077,7 @@ class Task(object):
         """
         Return an iterator over return codes for the given key.
         """
-        for (w, k), rc in self._d_source_rc.iteritems():
+        for (w, k), rc in self._d_source_rc.items():
             if k == key:
                 yield rc
 
@@ -1071,13 +1088,13 @@ class Task(object):
         """
         if match_keys:
             # Use the items iterator for the underlying dict.
-            for rc, src in self._d_rc_sources.iteritems():
+            for rc, src in self._d_rc_sources.items():
                 keys = [t[1] for t in src if t[0] is worker and \
                                              t[1] in match_keys]
                 if len(keys) > 0:
                     yield rc, keys
         else:
-            for rc, src in self._d_rc_sources.iteritems():
+            for rc, src in self._d_rc_sources.items():
                 keys = [t[1] for t in src if t[0] is worker]
                 if len(keys) > 0:
                     yield rc, keys
@@ -1086,7 +1103,7 @@ class Task(object):
         """
         Return an iterator over key, rc for a specific worker.
         """
-        for rc, src in self._d_rc_sources.iteritems():
+        for rc, src in self._d_rc_sources.items():
             for w, k in src:
                 if w is worker:
                     yield k, rc
@@ -1134,7 +1151,7 @@ class Task(object):
         """
         msgtree = self._msgtree('stdout')
         select_key = lambda k: k[1] == key
-        return "".join(imap(str, msgtree.messages(select_key)))
+        return b''.join(bytes(msg) for msg in msgtree.messages(select_key))
 
     node_buffer = key_buffer
 
@@ -1147,7 +1164,7 @@ class Task(object):
         """
         errtree = self._msgtree('stderr')
         select_key = lambda k: k[1] == key
-        return "".join(imap(str, errtree.messages(select_key)))
+        return b''.join(bytes(msg) for msg in errtree.messages(select_key))
 
     node_error = key_error
 
@@ -1170,7 +1187,7 @@ class Task(object):
         Get max return code encountered during last run
             or None in the following cases:
                 - all commands timed out,
-                - no command was executed.
+                - no command-based worker was executed.
 
         How retcodes work
         =================
@@ -1217,7 +1234,8 @@ class Task(object):
 
     def iter_retcodes(self, match_keys=None):
         """
-        Iterate over return codes, returns a tuple (rc, keys).
+        Iterate over return codes of command-based workers, returns a
+        tuple (rc, keys).
 
         Optional parameter match_keys add filtering on these keys.
 
@@ -1229,11 +1247,11 @@ class Task(object):
         """
         if match_keys:
             # Use the items iterator for the underlying dict.
-            for rc, src in self._d_rc_sources.iteritems():
+            for rc, src in self._d_rc_sources.items():
                 keys = [t[1] for t in src if t[1] in match_keys]
                 yield rc, keys
         else:
-            for rc, src in self._d_rc_sources.iteritems():
+            for rc, src in self._d_rc_sources.items():
                 yield rc, [t[1] for t in src]
 
     def num_timeout(self):
@@ -1278,7 +1296,7 @@ class Task(object):
             tasks = Task._tasks.copy()
         finally:
             Task._task_lock.release()
-        for thread, task in tasks.iteritems():
+        for thread, task in tasks.items():
             if thread != from_thread:
                 task.join()
 
@@ -1286,10 +1304,12 @@ class Task(object):
         """Get propagation channel for gateway (create one if needed).
 
         Use self.gateways dictionary that allows lookup like:
-            gateway => (worker channel, set of metaworkers)
+            gateway (string) => (worker channel, set of metaworkers)
         """
+        gwstr = str(gateway)
+
         # create gateway channel if needed
-        if gateway not in self.gateways:
+        if gwstr not in self.gateways:
             chan = PropagationChannel(self, gateway)
             logger = logging.getLogger(__name__)
             logger.info("pchannel: creating new channel %s", chan)
@@ -1309,10 +1329,10 @@ class Task(object):
             chanworker.SNAME_STDERR = chan.SNAME_ERROR
             self.schedule(chanworker)
             # update gateways dict
-            self.gateways[gateway] = (chanworker, set([metaworker]))
+            self.gateways[gwstr] = (chanworker, set([metaworker]))
         else:
             # TODO: assert chanworker is running (need Worker.running())
-            chanworker, metaworkers = self.gateways[gateway]
+            chanworker, metaworkers = self.gateways[gwstr]
             metaworkers.add(metaworker)
         return chanworker.eh
 
@@ -1325,19 +1345,21 @@ class Task(object):
         logger = logging.getLogger(__name__)
         logger.debug("pchannel_release %s %s", gateway, metaworker)
 
-        if gateway not in self.gateways:
+        gwstr = str(gateway)
+
+        if gwstr not in self.gateways:
             logger.error("pchannel_release: no pchannel found for gateway %s",
-                         gateway)
+                         gwstr)
         else:
             # TODO: delay gateway closing when other gateways are running
-            chanworker, metaworkers = self.gateways[gateway]
+            chanworker, metaworkers = self.gateways[gwstr]
             metaworkers.remove(metaworker)
             if len(metaworkers) == 0:
                 logger.info("pchannel_release: destroying channel %s",
                             chanworker.eh)
                 chanworker.abort()
                 # delete gateway reference
-                del self.gateways[gateway]
+                del self.gateways[gwstr]
 
 
 def task_self(defaults=None):
@@ -1388,7 +1410,7 @@ def task_cleanup():
         # missed the engine notification window (it was just exiting, which is
         # quite a common case if we didn't task_join() previously), or we may
         # have lost some task's dispatcher port messages.
-        for task in tasks.itervalues():
+        for task in tasks.values():
             task.abort(kill=True)
         # also, for other task than self, task.abort() is async and performed
         # through an EngineAbortException, so tell the Python scheduler to give
