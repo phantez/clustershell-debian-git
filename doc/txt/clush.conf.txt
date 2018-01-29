@@ -6,10 +6,10 @@
 Configuration file for `clush`
 ------------------------------
 
-:Author: Stephane Thiell, CEA DAM  <stephane.thiell@cea.fr>
-:Date:   2012-02-15
+:Author: Stephane Thiell, <sthiell@stanford.edu>
+:Date:   2015-08-27
 :Copyright: CeCILL-C V1
-:Version: 1.6
+:Version: 1.7
 :Manual section: 5
 :Manual group: ClusterShell User Manual
 
@@ -21,8 +21,9 @@ DESCRIPTION
 following order:
 
  1. command-line options
- 2. user configuration file (*~/.clush.conf*)
- 3. system-wide configuration file (*/etc/clustershell/clush.conf*)
+ 2. user configuration file (*$XDG_CONFIG_HOME/clustershell/clush.conf*)
+ 3. local pip user installation (*$HOME/.local/etc/clustershell/clush.conf*)
+ 4. system-wide configuration file (*/etc/clustershell/clush.conf*)
 
 For each parameter, the first obtained value will be used.
 
@@ -71,11 +72,21 @@ verbosity
 ssh_user
   Set the ssh user to use for remote connection (default is to not specify).
 ssh_path
-  Set the ssh binary path to use for remote connection (default is
-  `/usr/bin/ssh`).
+  Set the ssh binary path to use for remote connection (default is `ssh`).
 ssh_options
   Set additional options to pass to the underlying ssh command.
-
+scp_path
+  Set the scp binary path to use for remote copy (default is `scp`).
+scp_options
+  Set additional options to pass to the underlying scp command. If not
+  specified, ssh_options are used instead.
+rsh_path
+  Set the rsh binary path to use for remote connection (default is
+  `rsh`). You could easily use mrsh or krsh by simply changing this value.
+rcp_path
+  Same a rsh_path for rcp command. (Default is `rcp`)
+rsh_options
+  Set additional options to pass to the underlying rsh/rcp command.
 
 EXAMPLES
 ===========
@@ -93,17 +104,24 @@ Simple configuration file.
 | color: auto
 | fd_max: 10240
 | node_count: yes
-| 
+|
 
 
 FILES
 =====
 
-*~/.clush.conf*
-  This is the per-user configuration file.
-
 */etc/clustershell/clush.conf*
-  System-wide configuration file.
+  System-wide clush configuration file.
+
+*$XDG_CONFIG_HOME/clustershell/clush.conf*
+  User configuration file for clush. If $XDG_CONFIG_HOME is not defined,
+  *$HOME/.config/clustershell/clush.conf* is used instead.
+
+*$HOME/.local/etc/clustershell/clush.conf*
+  Local user configuration file for clush (default installation for pip --user)
+
+*~/.clush.conf*
+  Deprecated per-user clush configuration file.
 
 
 HISTORY
@@ -121,4 +139,3 @@ SEE ALSO
 ``clush``\(1), ``nodeset``\(1), ``groups.conf``\(5)
 
 http://clustershell.sourceforge.net/
-

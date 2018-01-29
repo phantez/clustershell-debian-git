@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ClusterShell timer test suite
-# Written by S. Thiell 2009-02-15
+# Written by S. Thiell
 
 
 """Unit test for ClusterShell Task's timer"""
@@ -13,6 +13,7 @@ import unittest
 
 sys.path.insert(0, '../lib')
 
+from TLib import HOSTNAME
 from ClusterShell.Engine.Engine import EngineTimer, EngineIllegalOperationError
 from ClusterShell.Event import EventHandler
 from ClusterShell.Task import *
@@ -43,7 +44,7 @@ class TaskTimerTest(unittest.TestCase):
 
         # init event handler for timer's callback
         test_handler = self.__class__.TSimpleTimerChecker()
-        timer1 = task.timer(1.0, handler=test_handler)
+        timer1 = task.timer(0.5, handler=test_handler)
         self.assert_(timer1 != None)
         # run task
         task.resume()
@@ -54,12 +55,33 @@ class TaskTimerTest(unittest.TestCase):
         task = task_self()
         self.assert_(task != None)
         test_handler = self.__class__.TSimpleTimerChecker()
-        timer1 = task.timer(1.0, handler=test_handler)
+        timer1 = task.timer(0.5, handler=test_handler)
         self.assert_(timer1 != None)
-        timer2 = task.timer(1.0, handler=test_handler)
+        timer2 = task.timer(0.5, handler=test_handler)
         self.assert_(timer2 != None)
         task.resume()
         self.assertEqual(test_handler.count, 2)
+
+    def testSimpleTimerImmediate(self):
+        """test simple immediate timer"""
+        task = task_self()
+        self.assert_(task != None)
+        test_handler = self.__class__.TSimpleTimerChecker()
+        timer1 = task.timer(0.0, handler=test_handler)
+        self.assert_(timer1 != None)
+        task.resume()
+        self.assertEqual(test_handler.count, 1)
+
+    def testSimpleTimerImmediate2(self):
+        """test simple immediate timers"""
+        task = task_self()
+        self.assert_(task != None)
+        test_handler = self.__class__.TSimpleTimerChecker()
+        for i in range(10):
+            timer1 = task.timer(0.0, handler=test_handler)
+            self.assert_(timer1 != None)
+        task.resume()
+        self.assertEqual(test_handler.count, 10)
 
     class TRepeaterTimerChecker(EventHandler):
         def __init__(self):
@@ -67,7 +89,7 @@ class TaskTimerTest(unittest.TestCase):
             
         def ev_timer(self, timer):
             self.count += 1
-            timer.set_nextfire(0.5)
+            timer.set_nextfire(0.2)
             if self.count > 4:
                 timer.invalidate()
 
@@ -77,7 +99,7 @@ class TaskTimerTest(unittest.TestCase):
         self.assert_(task != None)
         # init event handler for timer's callback
         test_handler = self.__class__.TRepeaterTimerChecker()
-        timer1 = task.timer(1.0, interval=0.5, handler=test_handler)
+        timer1 = task.timer(0.5, interval=0.2, handler=test_handler)
         self.assert_(timer1 != None)
         # run task
         task.resume()
@@ -89,7 +111,7 @@ class TaskTimerTest(unittest.TestCase):
         self.assert_(task != None)
         # init event handler for timer's callback
         test_handler = self.__class__.TRepeaterTimerChecker()
-        timer1 = task.timer(1.0, interval=0.5, handler=test_handler)
+        timer1 = task.timer(0.5, interval=0.2, handler=test_handler)
         self.assert_(timer1 != None)
         # run task
         task.resume()
@@ -202,7 +224,7 @@ class TaskTimerTest(unittest.TestCase):
         # init worker
         worker = task.shell("/bin/sleep 1", handler=test_eh)
         self.assert_(worker != None)
-        worker = task.shell("/bin/sleep 3", nodes='localhost', handler=test_eh)
+        worker = task.shell("/bin/sleep 3", nodes=HOSTNAME, handler=test_eh)
         self.assert_(worker != None)
         # init timer
         timer = task.timer(1.5, interval=0.5, handler=test_eh)
@@ -249,10 +271,10 @@ class TaskTimerTest(unittest.TestCase):
         self.assert_(task != None)
         test_eh = self.__class__.TEventHandlerTimerSetNextFire(self)
         # init worker
-        worker = task.shell("/bin/sleep 6", nodes='localhost', handler=test_eh)
+        worker = task.shell("/bin/sleep 3", nodes=HOSTNAME, handler=test_eh)
         self.assert_(worker != None)
         # init timer
-        timer = task.timer(2.0, interval=0.2, handler=test_eh)
+        timer = task.timer(1.0, interval=0.2, handler=test_eh)
         self.assert_(timer != None)
         test_eh.timer = timer
         # run task
@@ -294,10 +316,10 @@ class TaskTimerTest(unittest.TestCase):
         # init worker
         worker = task.shell("/bin/uname -r", handler=test_eh)
         self.assert_(worker != None)
-        worker = task.shell("/bin/sleep 5", nodes='localhost', handler=test_eh)
+        worker = task.shell("/bin/sleep 2", nodes=HOSTNAME, handler=test_eh)
         self.assert_(worker != None)
         # init timer
-        timer = task.timer(4.0, interval=0.5, handler=test_eh)
+        timer = task.timer(1.0, interval=0.5, handler=test_eh)
         self.assert_(timer != None)
         test_eh.timer = timer
         # run task
@@ -305,6 +327,33 @@ class TaskTimerTest(unittest.TestCase):
         # test timer didn't fire, invalidated in a worker's event handler
         self.assert_(test_eh.flags & EV_READ)
         self.assert_(not test_eh.flags & EV_TIMER)
+
+    class TEventHandlerTimerInvalidateSameRunloop(EventHandler):
+        """timer operations event handler simulator"""
+
+        def __init__(self, test):
+            self.timer1 = None
+            self.timer2 = None
+            self.count = 0
+
+        def ev_timer(self, timer):
+            self.count += 1
+            # Invalidate both timers, the other is expected to fire during the
+            # same runloop, but now it should not.
+            self.timer1.invalidate()
+            self.timer2.invalidate()
+
+    def testTimerInvalidateSameRunloop(self):
+        """test timer invalidate by other timer in same runloop"""
+        task = task_self()
+        test_eh = self.__class__.TEventHandlerTimerInvalidateSameRunloop(self)
+        timer1 = task.timer(0.5, interval=0.5, handler=test_eh)
+        test_eh.timer1 = timer1
+        timer2 = task.timer(0.5, interval=0.5, handler=test_eh)
+        test_eh.timer2 = timer2
+        task.resume()
+        # check that only one timer is fired
+        self.assertEqual(test_eh.count, 1)
 
     class TEventHandlerTimerOtherSetNextFire(EventHandler):
         def __init__(self, test):
@@ -342,7 +391,7 @@ class TaskTimerTest(unittest.TestCase):
         self.assert_(task != None)
         test_eh = self.__class__.TEventHandlerTimerOtherSetNextFire(self)
         # init worker
-        worker = task.shell("/bin/sleep 1", nodes='localhost', handler=test_eh)
+        worker = task.shell("/bin/sleep 1", handler=test_eh)
         self.assert_(worker != None)
         # init timer
         timer = task.timer(10.0, interval=0.5, handler=test_eh)
@@ -384,7 +433,7 @@ class TaskTimerTest(unittest.TestCase):
         # run task
         task.resume()
         self.assertEqual(test_handler.count, 1)
-    
+
     class TForceDelayedRepeaterChecker(EventHandler):
         def __init__(self):
             self.count = 0
@@ -393,7 +442,7 @@ class TaskTimerTest(unittest.TestCase):
             self.count += 1
             if self.count == 1:
                 # force delay timer (NOT a best practice!)
-                sleep(4)
+                sleep(2)
                 # do not invalidate first time
             else:
                 # invalidate next time to stop repeater
@@ -404,10 +453,39 @@ class TaskTimerTest(unittest.TestCase):
         task = task_self()
         self.assert_(task != None)
         test_handler = self.__class__.TForceDelayedRepeaterChecker()
-        repeater1 = task.timer(1.0, interval=0.5, handler=test_handler)
+        repeater1 = task.timer(0.5, interval=0.25, handler=test_handler)
         self.assert_(repeater1 != None)
         task.resume()
         self.assertEqual(test_handler.count, 2)
+
+    class TForceDelayedRepeaterAutoCloseChecker(EventHandler):
+
+        INTERVAL = 0.25
+
+        def __init__(self):
+            self.count = 0
+
+        def ev_timer(self, timer):
+            self.count += 1
+            sleep(self.INTERVAL + 0.1)
+
+    def testForceDelayedRepeaterAutoClose(self):
+        """test repeater being forcibly delayed (w/ autoclose)"""
+        # Test Github issue #254
+        INTERVAL = 0.25
+        task = task_self()
+        teh = self.__class__.TForceDelayedRepeaterAutoCloseChecker()
+        bootstrap = task.shell("sleep %f" % INTERVAL)
+        repeater1 = task.timer(INTERVAL, teh, INTERVAL, autoclose=True)
+        repeater2 = task.timer(INTERVAL, teh, INTERVAL, autoclose=True)
+        task.resume()
+        # Expected behavior: both timers will fire after INTERVAL, the first
+        # one will block thread for INTERVAL+0.1, the second one will also
+        # block for INTERVAL+0.1 more time. Then at next runloop the engine
+        # will see our shell command termination so will unregister associated
+        # worker client. At this point, only autoclosing timers remain
+        # registered, so timer firing will be skipped and runloop will exit.
+        self.assertEqual(teh.count, 2)
 
     def testMultipleAddSameTimerPrivate(self):
         """test multiple add() of same timer [private]"""
@@ -444,9 +522,3 @@ class TaskTimerTest(unittest.TestCase):
         thread.start_new_thread(TaskTimerTest._thread_timer_create_func, (self, task))
         task.resume()
         task_wait()
-
-
-if __name__ == '__main__':
-    suite = unittest.TestLoader().loadTestsFromTestCase(TaskTimerTest)
-    unittest.TextTestRunner(verbosity=2).run(suite)
-

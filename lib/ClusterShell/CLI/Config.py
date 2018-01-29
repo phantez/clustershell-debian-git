@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2010, 2011)
-#  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
+# Copyright CEA/DAM/DIF (2010-2015)
+#  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #
 # This file is part of the ClusterShell library.
 #
@@ -36,8 +36,9 @@ CLI configuration classes
 """
 
 import ConfigParser
-import os
+from os.path import expanduser
 
+from ClusterShell.Defaults import config_paths, DEFAULTS
 from ClusterShell.CLI.Display import VERB_QUIET, VERB_STD, \
     VERB_VERB, VERB_DEBUG, THREE_CHOICES
 
@@ -56,14 +57,14 @@ class ClushConfigError(Exception):
 class ClushConfig(ConfigParser.ConfigParser, object):
     """Config class for clush (specialized ConfigParser)"""
 
-    main_defaults = { "fanout" : "64",
-                      "connect_timeout" : "30",
-                      "command_timeout" : "0",
-                      "history_size" : "100",
-                      "color" : THREE_CHOICES[-1], # auto
-                      "verbosity" : "%d" % VERB_STD,
-                      "node_count" : "yes",
-                      "fd_max" : "16384" }
+    main_defaults = {"fanout": "%d" % DEFAULTS.fanout,
+                     "connect_timeout": "%f" % DEFAULTS.connect_timeout,
+                     "command_timeout": "%f" % DEFAULTS.command_timeout,
+                     "history_size": "100",
+                     "color": THREE_CHOICES[-1], # auto
+                     "verbosity": "%d" % VERB_STD,
+                     "node_count": "yes",
+                     "fd_max": "16384"}
 
     def __init__(self, options, filename=None):
         """Initialize ClushConfig object from corresponding
@@ -77,8 +78,9 @@ class ClushConfig(ConfigParser.ConfigParser, object):
         if filename:
             files = [filename]
         else:
-            files = ['/etc/clustershell/clush.conf',
-                     os.path.expanduser('~/.clush.conf')]
+            files = config_paths('clush.conf')
+            # deprecated user config, kept in 1.x for 1.6 compat
+            files.insert(1, expanduser('~/.clush.conf'))
         self.read(files)
 
         # Apply command line overrides
@@ -100,6 +102,14 @@ class ClushConfig(ConfigParser.ConfigParser, object):
             self._set_main("command_timeout", options.command_timeout)
         if options.whencolor:
             self._set_main("color", options.whencolor)
+
+        try:
+            # -O/--option KEY=VALUE
+            for cfgopt in options.option:
+                optkey, optvalue = cfgopt.split('=', 1)
+                self._set_main(optkey, optvalue)
+        except ValueError, exc:
+            raise ClushConfigError("Main", cfgopt, "invalid -O/--option value")
 
     def _set_main(self, option, value):
         """Set given option/value pair in the Main section."""
@@ -170,6 +180,31 @@ class ClushConfig(ConfigParser.ConfigParser, object):
     def ssh_options(self):
         """ssh_options value as a string (optional)"""
         return self._get_optional("Main", "ssh_options")
+
+    @property
+    def scp_path(self):
+        """scp_path value as a string (optional)"""
+        return self._get_optional("Main", "scp_path")
+
+    @property
+    def scp_options(self):
+        """scp_options value as a string (optional)"""
+        return self._get_optional("Main", "scp_options")
+
+    @property
+    def rsh_path(self):
+        """rsh_path value as a string (optional)"""
+        return self._get_optional("Main", "rsh_path")
+
+    @property
+    def rcp_path(self):
+        """rcp_path value as a string (optional)"""
+        return self._get_optional("Main", "rcp_path")
+
+    @property
+    def rsh_options(self):
+        """rsh_options value as a string (optional)"""
+        return self._get_optional("Main", "rsh_options")
 
     @property
     def color(self):

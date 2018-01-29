@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2010, 2011, 2012)
-#  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
+# Copyright CEA/DAM/DIF (2010-2015)
+#  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #
 # This file is part of the ClusterShell library.
 #
@@ -82,6 +82,7 @@ class Display(object):
         self._diffref = None
         # diff implies at least -b
         self.gather = options.gatherall or options.gather or options.diff
+        self.progress = getattr(options, 'progress', False) # only in clush
         # check parameter combinaison
         if options.diff and options.line_mode:
             raise ValueError("diff not supported in line_mode")
@@ -188,6 +189,11 @@ class Display(object):
         """Generic method for displaying nodeset/content according to current
         object settings."""
         return self._display(NodeSet(nodeset), obj)
+
+    def print_gather_finalize(self, nodeset):
+        """Finalize display of diff-like gathered contents."""
+        if self._display == self._print_diff and self._diffref:
+            return self._display(nodeset, '')
 
     def print_gather_keys(self, keys, obj):
         """Generic method for displaying raw keys/content according to current
