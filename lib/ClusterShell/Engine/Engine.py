@@ -1,34 +1,22 @@
 #
-# Copyright CEA/DAM/DIF (2007-2016)
-#  Contributor: Stephane THIELL <sthiell@stanford.edu>
+# Copyright (C) 2007-2016 CEA/DAM
+# Copyright (C) 2015-2016 Stephane Thiell <sthiell@stanford.edu>
 #
-# This file is part of the ClusterShell library.
+# This file is part of ClusterShell.
 #
-# This software is governed by the CeCILL-C license under French law and
-# abiding by the rules of distribution of free software.  You can  use,
-# modify and/ or redistribute the software under the terms of the CeCILL-C
-# license as circulated by CEA, CNRS and INRIA at the following URL
-# "http://www.cecill.info".
+# ClusterShell is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
 #
-# As a counterpart to the access to the source code and  rights to copy,
-# modify and redistribute granted by the license, users are provided only
-# with a limited warranty  and the software's author,  the holder of the
-# economic rights,  and the successive licensors  have only  limited
-# liability.
+# ClusterShell is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
 #
-# In this respect, the user's attention is drawn to the risks associated
-# with loading,  using,  modifying and/or developing or reproducing the
-# software by the user in light of its specific status of free software,
-# that may mean  that it is complicated to manipulate,  and  that  also
-# therefore means  that it is reserved for developers  and  experienced
-# professionals having in-depth computer knowledge. Users are therefore
-# encouraged to load and test the software's suitability as regards their
-# requirements in conditions enabling the security of their systems and/or
-# data to be ensured and,  more generally, to use and operate it in the
-# same conditions as regards security.
-#
-# The fact that you are presently reading this means that you have had
-# knowledge of the CeCILL-C license and that you accept its terms.
+# You should have received a copy of the GNU Lesser General Public
+# License along with ClusterShell; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 """
 Interface of underlying Task's Engine.
@@ -53,6 +41,11 @@ E_WRITE = 0x2
 
 # Define epsilon value for time float arithmetic operations
 EPSILON = 1.0e-3
+
+# Special fanout value for unlimited
+FANOUT_UNLIMITED = -1
+# Special fanout value to use default Engine fanout
+FANOUT_DEFAULT = None
 
 
 class EngineException(Exception):
@@ -377,12 +370,16 @@ class Engine:
         self._clients = set()
         self._ports = set()
 
-        # keep track of the number of registered clients (delayable only)
-        self.reg_clients = 0
+        # keep track of the number of registered clients per worker
+        # (this does not include ports)
+        self._reg_stats = {}
 
         # keep track of registered file descriptors in a dict where keys
         # are fileno and values are (EngineClient, EngineClientStream) tuples
         self.reg_clifds = {}
+
+        # fanout cache used to speed up client launch when fanout changed
+        self._prev_fanout = 0    # fanout_diff != 0 the first time
 
         # Current loop iteration counter. It is the number of performed engine
         # loops in order to keep track of client registration epoch, so we can
@@ -428,6 +425,25 @@ class Engine:
                              stream.fd)
         return (None, None)
 
+    def _can_register(self, client):
+        assert not client.registered
+
+        if not client.delayable or client.worker._fanout == FANOUT_UNLIMITED:
+            return True
+        elif client.worker._fanout is FANOUT_DEFAULT:
+            return self._reg_stats.get('default', 0) < self.info['fanout']
+        else:
+            worker = client.worker
+            return self._reg_stats.get(worker, 0) < worker._fanout
+
+    def _update_reg_stats(self, client, offset):
+        if client.worker._fanout is FANOUT_DEFAULT:
+            key = 'default'
+        else:
+            key = client.worker
+        self._reg_stats.setdefault(key, 0)
+        self._reg_stats[key] += offset
+
     def add(self, client):
         """Add a client to engine."""
         # bind to engine
@@ -440,12 +456,10 @@ class Engine:
             # add to port set (non-delayable)
             self._ports.add(client)
 
-        if self.running:
+        if self.running and self._can_register(client):
             # in-fly add if running
-            if not client.delayable:
-                self.register(client)
-            elif self.info["fanout"] > self.reg_clients:
-                self.register(client._start())
+            self.register(client._start())
+
 
     def _remove(self, client, abort, did_timeout=False):
         """Remove a client from engine (subroutine)."""
@@ -467,7 +481,8 @@ class Engine:
         else:
             self._ports.remove(client)
         self._remove(client, abort, did_timeout)
-        self.start_all()
+        # we just removed a client, so start pending client(s)
+        self.start_clients()
 
     def remove_stream(self, client, stream):
         """
@@ -522,7 +537,7 @@ class Engine:
         client._reg_epoch = self._current_loopcnt
 
         if client.delayable:
-            self.reg_clients += 1
+            self._update_reg_stats(client, 1)
 
         # set interest event bits...
         for streams, ievent in ((client.streams.active_readers, E_READ),
@@ -575,7 +590,7 @@ class Engine:
 
         client.registered = False
         if client.delayable:
-            self.reg_clients -= 1
+            self._update_reg_stats(client, -1)
 
     def modify(self, client, sname, setmask, clearmask):
         """Modify the next loop interest events bitset for a client stream."""
@@ -661,23 +676,21 @@ class Engine:
                 self._debug("START PORT %s" % port)
                 self.register(port)
 
-    def start_all(self):
-        """
-        Start and register all other possible clients, in respect of task
-        fanout.
-        """
-        # Get current fanout value
-        fanout = self.info["fanout"]
-        assert fanout > 0
-        if fanout <= self.reg_clients:
-            return
+    def start_clients(self):
+        """Start and register regular engine clients in respect of fanout."""
+        # check if engine fanout has changed
+        # NOTE: worker._fanout live changes not supported (see #323)
+        fanout_diff = self.info['fanout'] - self._prev_fanout
+        if fanout_diff:
+            self._prev_fanout = self.info['fanout']
 
-        # Register regular engine clients within the fanout limit
         for client in self._clients:
-            if not client.registered:
+            if not client.registered and self._can_register(client):
                 self._debug("START CLIENT %s" % client.__class__.__name__)
                 self.register(client._start())
-                if fanout <= self.reg_clients:
+                # if first time or engine fanout has changed, we do a full scan
+                if fanout_diff == 0:
+                    # if engine fanout has not changed, we only start 1 client
                     break
 
     def run(self, timeout):
@@ -695,7 +708,7 @@ class Engine:
                 # peek in ports for early pending messages
                 self.snoop_ports()
                 # start all other clients
-                self.start_all()
+                self.start_clients()
                 # run loop until all clients and timers are removed
                 self.runloop(timeout)
             except EngineTimeoutException:
@@ -722,6 +735,7 @@ class Engine:
             # cleanup
             self.timerq.clear()
             self.running = False
+            self._prev_fanout = 0
 
     def snoop_ports(self):
         """

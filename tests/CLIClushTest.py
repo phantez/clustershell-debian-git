@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# scripts/clush.py tool test suite
+# ClusterShell.CLI.Clush test suite
 # Written by S. Thiell
 
 
@@ -133,8 +133,6 @@ class CLIClushTest_A(unittest.TestCase):
 
     def test_006_output_gathering(self):
         """test clush (output gathering)"""
-        self._clush_t(["-w", HOSTNAME, "-L", "echo", "ok"], None, \
-            "%s: ok\n" % HOSTNAME)
         self._clush_t(["-w", HOSTNAME, "-bL", "echo", "ok"], None, \
             "%s: ok\n" % HOSTNAME)
         self._clush_t(["-w", HOSTNAME, "-qbL", "echo", "ok"], None, \
@@ -346,8 +344,8 @@ class CLIClushTest_A(unittest.TestCase):
         kth = KillerThread()
         args = ["-w", HOSTNAME, "--worker=exec", "-q", "--nostdin", "-b",
                 "echo start; sleep 10"]
-        process = Popen(["../scripts/clush.py"] + args, stderr=PIPE,
-                        stdout=PIPE, bufsize=0)
+        process = Popen(["../lib/ClusterShell/CLI/Clush.py"] + args,
+                        stderr=PIPE, stdout=PIPE, bufsize=0)
         kth.pidkill = process.pid
         kth.start()
         stderr = process.communicate()[1]
@@ -489,6 +487,17 @@ class CLIClushTest_A(unittest.TestCase):
                       "echo foo"], None,
                       re.compile(r"^((localhost|%s): foo\n){2}$" % HOSTNAME))
 
+    def test_035_sorted_line_mode(self):
+        """test clush (sorted line mode -L)"""
+        self._clush_t(["-w", HOSTNAME, "-L", "echo", "ok"], None,
+                      "%s: ok\n" % HOSTNAME)
+
+        # Issue #326
+        cmd = 's=%h; n=${s//[!0-9]/}; if [[ $(expr $n %% 2) == 0 ]]; then ' \
+              'echo foo; else echo bar; fi'
+
+        self._clush_t(["-w", "cs[01-03]", "--worker=exec", "-L", cmd], None,
+                      'cs01: bar\ncs02: foo\ncs03: bar\n', 0)
 
 class CLIClushTest_B_StdinFailure(unittest.TestCase):
     """Unit test class for testing CLI/Clush.py and stdin failure"""

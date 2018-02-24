@@ -7,9 +7,9 @@ format output from clush/pdsh-like output and more
 --------------------------------------------------
 
 :Author: Stephane Thiell <sthiell@stanford.edu>
-:Date:   2016-06-18
-:Copyright: CeCILL-C V1
-:Version: 1.7.2
+:Date:   2016-12-20
+:Copyright: GNU Lesser General Public License version 2.1 or later (LGPLv2.1+)
+:Version: 1.7.3
 :Manual section: 1
 :Manual group: ClusterShell User Manual
 
@@ -23,7 +23,7 @@ DESCRIPTION
 ===========
 ``clubak`` formats text from standard input containing lines of the form
 "`node:output`".  It is fully backward compatible with ``dshbak``\(1) but
-provides additonal features. For instance, ``clubak`` always displays
+provides additional features. For instance, ``clubak`` always displays
 its results sorted by node/nodeset.
 
 You do not need to use ``clubak`` when using ``clush``\(1) as all output
