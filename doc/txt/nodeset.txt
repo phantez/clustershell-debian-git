@@ -6,10 +6,10 @@
 compute advanced nodeset operations
 -----------------------------------
 
-:Author: Stephane Thiell, CEA DAM  <stephane.thiell@cea.fr>
-:Date:   2012-03-31
+:Author: Stephane Thiell <sthiell@stanford.edu>
+:Date:   2015-11-05
 :Copyright: CeCILL-C V1
-:Version: 1.6
+:Version: 1.7
 :Manual section: 1
 :Manual group: ClusterShell User Manual
 
@@ -17,17 +17,20 @@ compute advanced nodeset operations
 SYNOPSIS
 ========
 
- ``nodeset`` [COMMAND] [OPTIONS] [nodeset1 [-ixX] nodeset2|...]
+ ``nodeset`` [OPTIONS] [COMMAND] [nodeset1 [OPERATION] nodeset2|...]
 
 
 DESCRIPTION
 ===========
 ``nodeset`` is an utility command provided with the ClusterShell library which
 implements some features of ClusterShell's NodeSet and RangeSet Python classes.
-It provides easy manipulation of indexed cluster nodes and node groups. It is
-automatically bound to the library node group resolution mechanism. Thus,
-``nodeset`` is especially useful to enhance cluster aware administration shell
-scripts.
+It provides easy manipulation of 1D or nD-indexed cluster nodes and node
+groups.
+
+Also, ``nodeset`` is automatically bound to the library node group resolution
+mechanism. Thus, it is especially useful to enhance cluster aware
+administration shell scripts.
+
 
 OPTIONS
 =======
@@ -43,7 +46,7 @@ OPTIONS
     -f, --fold          fold nodeset(s) (or separate nodes) into one nodeset
     -l, --list          list node groups, list node groups and nodes (``-ll``) or list node groups, nodes and node count (``-lll``). When no argument is specified at all, this command will list all node group names found in selected group source (see also -s *GROUPSOURCE*). If any nodesets are specified as argument, this command will find node groups these nodes belongs to (individually). Optionally for each group, the fraction of these nodes being member of the group may be displayed (with ``-ll``), and also member count/total group node count (with ``-lll``). If a single hyphen-minus (-) is given as a nodeset, it will be read from standard input.
     -r, --regroup       fold nodes using node groups (see -s *GROUPSOURCE*)
-    --groupsources      list all configured group sources (see ``groups.conf``\(5))
+    --groupsources      list all active group sources (see ``groups.conf``\(5))
 
   Operations:
     -x SUB_NODES, --exclude=SUB_NODES
@@ -56,7 +59,7 @@ OPTIONS
   Options:
     -a, --all           call external node groups support to display all nodes
     --autostep=AUTOSTEP
-                        auto step threshold number when folding nodesets, if not specified, auto step is disabled. Example: autostep=4, "node2 node4 node6" folds in node[2,4,6] but autostep=3, "node2 node4 node6" folds in node[2-6/2]
+                        enable a-b/step style syntax when folding nodesets, value is min node count threshold (integer '4', percentage '50%' or 'auto'). If not specified, auto step is disabled (best for compatibility with other cluster tools. Example: autostep=4, "node2 node4 node6" folds in node[2,4,6] but autostep=3, "node2 node4 node6" folds in node[2-6/2].
     -d, --debug         output more messages for debugging purpose
     -q, --quiet         be quiet, print essential output only
     -R, --rangeset      switch to RangeSet instead of NodeSet. Useful when
@@ -65,10 +68,13 @@ OPTIONS
     -S SEPARATOR, --separator=SEPARATOR
                         separator string to use when expanding nodesets
                         (default: ' ')
+    -O FORMAT, --output-format=FORMAT
+                        output format (default: '%s')
     -I SLICE_RANGESET, --slice=SLICE_RANGESET
                         return sliced off result; examples of SLICE_RANGESET are "0" for simple index selection, or "1-9/2,16" for complex rangeset selection
     --split=MAXSPLIT    split result into a number of subsets
     --contiguous        split result into contiguous subsets (ie. for nodeset, subsets will contain nodes with same pattern name and a contiguous range of indexes, like foobar[1-100]; for rangeset, subsets with consists in contiguous index ranges)"""
+    --axis=RANGESET     for nD nodesets, fold along provided axis only. Axis are indexed from 1 to n and can be specified here either using the rangeset syntax, eg. '1', '1-2', '1,3', or by a single negative number meaning that the indice is counted from the end. Because some nodesets may have several different dimensions, axis indices are silently truncated to fall in the allowed range.
 
 
 For a short explanation of these options, see ``-h, --help``.
@@ -83,7 +89,7 @@ The ``nodeset`` command benefits from ClusterShell NodeSet basic
 arithmetic addition. This feature extends recognized string patterns by
 supporting operators matching all Operations seen previously. String
 patterns are read from left to right, by proceeding any character
-operators accordinately. 
+operators accordingly.
 
 Supported character operators
     ``,``
@@ -121,6 +127,12 @@ Example of advanced usage
 
   This computes a folded nodeset containing nodes found in group @gpu and @slurm:bigmem, but not in both, minus the nodes found in odd chassis groups from 1 to 9.
 
+"All nodes" extension (v1.7+)
+  The ``@*`` and ``@SOURCE:*`` special notations may be used in extended patterns to represent all nodes (in SOURCE) according to the *all* external shell command (see ``groups.conf``\(5)) and are equivalent to:
+
+    :$ nodeset [-s SOURCE] -a -f:
+
+
 
 EXIT STATUS
 ===========
@@ -140,6 +152,10 @@ Getting the node count
   
   | 140
   
+  :$ nodeset -c dc[1-2]n[100-199]:
+  
+  | 200
+  
   :$ nodeset -c @login:
   
   | 4
@@ -150,14 +166,27 @@ Folding nodesets
   | node[0-7,32-163]
 
   :$ echo node3 node6 node1 node2 node7 node5 | nodeset -f:
-
+  
   | node[1-3,5-7]
+
+  :$ nodeset -f dc1n2 dc2n2 dc1n1 dc2n1:
+  
+  | dc[1-2]n[1-2]
+
+  :$ nodeset --axis=1 -f dc1n2 dc2n2 dc1n1 dc2n1:
+  
+  | dc[1-2]n1,dc[1-2]n2
+
 
 
 Expanding nodesets
   :$ nodeset -e node[160-163]:
 
   | node160 node161 node162 node163
+
+  :$ echo 'dc[1-2]n[2-6/2]' | nodeset -e:
+
+  | dc1n2 dc1n4 dc1n6 dc2n2 dc2n4 dc2n6
 
 Excluding nodes from nodeset
   :$ nodeset -f node[32-159] -x node33:
@@ -175,17 +204,24 @@ Computing nodesets symmetric difference (xor)
   | node[32,34-155]
 
 Splitting nodes into several nodesets (expanding results)
-  :$ nodeset -e --split=3 node[1-9]:
+  :$ nodeset --split=3 -e node[1-9]:
 
   | node1 node2 node3
   | node4 node5 node6
   | node7 node8 node9
 
 Splitting non-contiguous nodesets (folding results)
-  :$ nodeset -f --contiguous node2 node3 node4 node8 node9:
+  :$ nodeset --contiguous -f node2 node3 node4 node8 node9:
 
   | node[2-4]
   | node[8-9]
+
+  :$ nodeset --contiguous -f dc[1,3]n[1-2,4-5]:
+
+  | dc1n[1-2]
+  | dc1n[4-5]
+  | dc3n[1-2]
+  | dc3n[4-5]
 
 
 HISTORY

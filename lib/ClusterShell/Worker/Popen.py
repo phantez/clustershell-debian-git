@@ -1,6 +1,6 @@
 #
-# Copyright CEA/DAM/DIF (2008, 2009, 2010, 2011)
-#  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
+# Copyright CEA/DAM/DIF (2008-2015)
+#  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #
 # This file is part of the ClusterShell library.
 #
@@ -36,7 +36,7 @@ WorkerPopen
 ClusterShell worker for executing local commands.
 
 Usage example:
-   >>> worker = WorkerPopen("/bin/uname", key="mykernel") 
+   >>> worker = WorkerPopen("/bin/uname", key="mykernel")
    >>> task.schedule(worker)    # schedule worker
    >>> task.resume()            # run task
    >>> worker.retcode()         # get return code
@@ -46,102 +46,80 @@ Usage example:
 
 """
 
-import os
+from ClusterShell.Worker.Worker import WorkerSimple, StreamClient
 
-from ClusterShell.Worker.Worker import WorkerSimple
+
+class PopenClient(StreamClient):
+
+    def __init__(self, worker, key, stderr, timeout, autoclose):
+        StreamClient.__init__(self, worker, key, stderr, timeout, autoclose)
+        self.popen = None
+        self.rc = None
+        # Declare writer stream to allow early buffering
+        self.streams.set_writer(worker.SNAME_STDIN, None, retain=False)
+
+    def _start(self):
+        """Worker is starting."""
+        assert not self.worker.started
+        assert self.popen is None
+
+        self.popen = self._exec_nonblock(self.worker.command, shell=True)
+
+        task = self.worker.task
+        if task.info("debug", False):
+            task.info("print_debug")(task, "POPEN: %s" % self.worker.command)
+
+        self.worker._on_start(self.key)
+        return self
+
+    def _close(self, abort, timeout):
+        """
+        Close client. See EngineClient._close().
+        """
+        if abort:
+            # it's safer to call poll() first for long time completed processes
+            prc = self.popen.poll()
+            # if prc is None, process is still running
+            if prc is None:
+                try: # try to kill it
+                    self.popen.kill()
+                except OSError:
+                    pass
+        prc = self.popen.wait()
+
+        self.streams.clear()
+
+        if prc >= 0: # filter valid rc
+            self.rc = prc
+            self.worker._on_rc(self.key, prc)
+        elif timeout:
+            assert abort, "abort flag not set on timeout"
+            self.worker._on_timeout(self.key)
+        elif not abort:
+            # if process was signaled, return 128 + signum (bash-like)
+            self.rc = 128 + -prc
+            self.worker._on_rc(self.key, self.rc)
+
+        if self.worker.eh:
+            self.worker.eh.ev_close(self.worker)
 
 
 class WorkerPopen(WorkerSimple):
     """
     Implements the Popen Worker.
     """
-
     def __init__(self, command, key=None, handler=None,
-        stderr=False, timeout=-1, autoclose=False):
-        """
-        Initialize Popen worker.
-        """
-        WorkerSimple.__init__(self, None, None, None, key, handler,
-            stderr, timeout, autoclose)
-
+                 stderr=False, timeout=-1, autoclose=False):
+        """Initialize Popen worker."""
+        WorkerSimple.__init__(self, None, None, None, key, handler, stderr,
+                              timeout, autoclose, client_class=PopenClient)
         self.command = command
         if not self.command:
-            raise ValueError("missing command parameter in WorkerPopen " \
-			     "constructor")
-
-        self.popen = None
-        self.rc = None
-
-    def _start(self):
-        """
-        Start worker.
-        """
-        assert self.popen is None
-
-        self.popen = self._exec_nonblock(self.command, shell=True)
-
-        if self.task.info("debug", False):
-            self.task.info("print_debug")(self.task, "POPEN: %s" % self.command)
-
-        if self.eh:
-            self.eh.ev_start(self)
-
-        return self
-
-    def _close(self, abort, flush, timeout):
-        """
-        Close client. See EngineClient._close().
-        """
-        if flush and self._rbuf:
-            # We still have some read data available in buffer, but no
-            # EOL. Generate a final message before closing.
-            self.worker._on_msgline(self._rbuf)
-
-        rc = -1
-        if abort:
-            # check if process has terminated
-            prc = self.popen.poll()
-            if prc is None:
-                # process is still running, kill it
-                self.popen.kill()
-        # release process
-        prc = self.popen.wait()
-        # get exit status
-        if prc >= 0:
-            # process exited normally
-            rc = prc
-        elif not abort:
-            # if process was signaled, return 128 + signum (bash-like)
-            rc = 128 + -prc
-
-        os.close(self.fd_reader)
-        self.fd_reader = None
-        if self.fd_error:
-            os.close(self.fd_error)
-            self.fd_error = None
-        if self.fd_writer:
-            os.close(self.fd_writer)
-            self.fd_writer = None
-
-        if rc >= 0: # filter valid rc
-            self._on_rc(rc)
-        elif timeout:
-            assert abort, "abort flag not set on timeout"
-            self._on_timeout()
-
-        if self.eh:
-            self.eh.ev_close(self)
-
-    def _on_rc(self, rc):
-        """
-        Set return code.
-        """
-        self.rc = rc        # 1.4- compat
-        WorkerSimple._on_rc(self, rc)
+            raise ValueError("missing command parameter in WorkerPopen "
+                             "constructor")
 
     def retcode(self):
-        """
-        Return return code or None if command is still in progress.
-        """
-        return self.rc
-   
+        """Return return code or None if command is still in progress."""
+        return self.clients[0].rc
+
+WORKER_CLASS = WorkerPopen

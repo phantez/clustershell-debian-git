@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010, 2011, 2012)
-#  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
+# Copyright CEA/DAM/DIF (2007-2015)
+#  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #
 # This file is part of the ClusterShell library.
 #
@@ -32,7 +32,7 @@
 # knowledge of the CeCILL-C license and that you accept its terms.
 
 """
-execute cluster commands in parallel
+Execute cluster commands in parallel
 
 clush is an utility program to run commands on a cluster which benefits
 from the ClusterShell library and its Ssh worker. It features an
@@ -47,21 +47,24 @@ When no command are specified, clush runs interactively.
 import errno
 import logging
 import os
+from os.path import abspath, dirname, exists, isdir, join
 import resource
 import sys
 import signal
+import time
 import threading
 
+from ClusterShell.Defaults import DEFAULTS, _load_workerclass
 from ClusterShell.CLI.Config import ClushConfig, ClushConfigError
 from ClusterShell.CLI.Display import Display
 from ClusterShell.CLI.Display import VERB_QUIET, VERB_STD, VERB_VERB, VERB_DEBUG
 from ClusterShell.CLI.OptionParser import OptionParser
 from ClusterShell.CLI.Error import GENERIC_ERRORS, handle_generic_error
-from ClusterShell.CLI.Utils import NodeSet, bufnodeset_cmp
+from ClusterShell.CLI.Utils import NodeSet, bufnodeset_cmp, human_bi_bytes_unit
 
 from ClusterShell.Event import EventHandler
 from ClusterShell.MsgTree import MsgTree
-from ClusterShell.NodeSet import RESOLVER_NOGROUP, RESOLVER_STD_GROUP
+from ClusterShell.NodeSet import RESOLVER_NOGROUP, std_group_resolver
 from ClusterShell.NodeSet import NodeSetParseError
 from ClusterShell.Task import Task, task_self
 
@@ -90,10 +93,11 @@ class OutputHandler(EventHandler):
         EventHandler.__init__(self)
         self._runtimer = None
 
-    def runtimer_init(self, task, ntotal):
+    def runtimer_init(self, task, ntotal=0):
         """Init timer for live command-completed progressmeter."""
-        self._runtimer = task.timer(2.0, RunTimer(task, ntotal),
-                                    interval=1./3., autoclose=True)
+        thandler = RunTimer(task, ntotal)
+        self._runtimer = task.timer(1.33, thandler, interval=1./3.,
+                                    autoclose=True)
 
     def _runtimer_clean(self):
         """Hide runtimer counter"""
@@ -109,6 +113,8 @@ class OutputHandler(EventHandler):
         """Finalize display of runtimer counter"""
         if self._runtimer:
             self._runtimer.eh.finalize(worker.task.default("USER_interactive"))
+            self._runtimer.invalidate()
+            self._runtimer = None
 
     def update_prompt(self, worker):
         """
@@ -119,6 +125,16 @@ class OutputHandler(EventHandler):
         worker.task.set_default("USER_running", False)
         if worker.task.default("USER_handle_SIGUSR1"):
             os.kill(os.getpid(), signal.SIGUSR1)
+
+    def ev_start(self, worker):
+        """Worker is starting."""
+        if self._runtimer:
+            self._runtimer.eh.start_time = time.time()
+
+    def ev_written(self, worker, node, sname, size):
+        """Bytes written on worker"""
+        if self._runtimer:
+            self._runtimer.eh.bytes_written += size
 
 class DirectOutputHandler(OutputHandler):
     """Direct output event handler class."""
@@ -152,7 +168,29 @@ class DirectOutputHandler(OutputHandler):
     def ev_close(self, worker):
         self.update_prompt(worker)
 
-class CopyOutputHandler(DirectOutputHandler):
+class DirectProgressOutputHandler(DirectOutputHandler):
+    """Direct output event handler class with progress support."""
+
+    # NOTE: This class is very similar to DirectOutputHandler, thus it could
+    #       first look overkill, but merging both is slightly impacting ev_read
+    #       performance of current DirectOutputHandler.
+
+    def ev_read(self, worker):
+        self._runtimer_clean()
+        # it is ~10% faster to avoid calling super here
+        node = worker.current_node or worker.key
+        self._display.print_line(node, worker.current_msg)
+
+    def ev_error(self, worker):
+        self._runtimer_clean()
+        node = worker.current_node or worker.key
+        self._display.print_line_error(node, worker.current_errmsg)
+
+    def ev_close(self, worker):
+        self._runtimer_clean()
+        DirectOutputHandler.ev_close(self, worker)
+
+class CopyOutputHandler(DirectProgressOutputHandler):
     """Copy output event handler."""
     def __init__(self, display, reverse=False):
         DirectOutputHandler.__init__(self, display)
@@ -197,11 +235,11 @@ class GatherOutputHandler(OutputHandler):
     def ev_close(self, worker):
         # Worker is closing -- it's time to gather results...
         self._runtimer_finalize(worker)
-        assert worker.current_node is not None, "cannot gather local command"
         # Display command output, try to order buffers by rc
         nodesetify = lambda v: (v[0], NodeSet._fromlist1(v[1]))
         cleaned = False
-        for rc, nodelist in sorted(worker.iter_retcodes()):
+        for _rc, nodelist in sorted(worker.iter_retcodes()):
+            ns_remain = NodeSet._fromlist1(nodelist)
             # Then order by node/nodeset (see bufnodeset_cmp)
             for buf, nodeset in sorted(map(nodesetify,
                                            worker.iter_buffers(nodelist)),
@@ -211,6 +249,9 @@ class GatherOutputHandler(OutputHandler):
                     self._runtimer_clean()
                     cleaned = True
                 self._display.print_gather(nodeset, buf)
+                ns_remain.difference_update(nodeset)
+            if ns_remain:
+                self._display.print_gather_finalize(ns_remain)
         self._display.flush()
 
         self._close_common(worker)
@@ -225,9 +266,11 @@ class GatherOutputHandler(OutputHandler):
         # Display return code if not ok ( != 0)
         for rc, nodelist in worker.iter_retcodes():
             if rc != 0:
-                ns = NodeSet._fromlist1(nodelist)
-                self._display.vprint_err(verbexit, \
-                    "clush: %s: exited with exit code %d" % (ns, rc))
+                nsdisp = ns = NodeSet._fromlist1(nodelist)
+                if self._display.verbosity > VERB_QUIET and len(ns) > 1:
+                    nsdisp = "%s (%d)" % (ns, len(ns))
+                msgrc = "clush: %s: exited with exit code %d" % (nsdisp, rc)
+                self._display.vprint_err(verbexit, msgrc)
 
         # Display nodes that didn't answer within command timeout delay
         if worker.num_timeout() > 0:
@@ -299,6 +342,9 @@ class RunTimer(EventHandler):
         self.tslen = len(str(self.total))
         self.wholelen = 0
         self.started = False
+        # updated by worker handler for progress
+        self.start_time = 0
+        self.bytes_written = 0
 
     def ev_timer(self, timer):
         self.update()
@@ -309,14 +355,32 @@ class RunTimer(EventHandler):
     def erase_line(self):
         if self.wholelen:
             sys.stderr.write(' ' * self.wholelen + '\r')
+            self.wholelen = 0
 
     def update(self):
-        cnt = len(self.task._engine.clients())
-        if cnt != self.cnt_last:
+        """Update runtime progress info"""
+        wrbwinfo = ''
+        if self.bytes_written > 0:
+            bandwidth = self.bytes_written/(time.time() - self.start_time)
+            wrbwinfo = " write: %s/s" % human_bi_bytes_unit(bandwidth)
+
+        gws = self.task.gateways.keys()
+        if gws:
+            # tree mode
+            act_targets = NodeSet()
+            for gw, (chan, metaworkers) in self.task.gateways.iteritems():
+                act_targets.updaten(mw.gwtargets[gw] for mw in metaworkers)
+            cnt = len(act_targets) + len(self.task._engine.clients()) - len(gws)
+            gwinfo = ' gw %d' % len(gws)
+        else:
+            cnt = len(self.task._engine.clients())
+            gwinfo = ''
+        if self.bytes_written > 0 or cnt != self.cnt_last:
             self.cnt_last = cnt
             # display completed/total clients
-            towrite = 'clush: %*d/%*d\r' % (self.tslen, self.total - cnt,
-                self.tslen, self.total)
+            towrite = 'clush: %*d/%*d%s%s\r' % (self.tslen, self.total - cnt,
+                                                self.tslen, self.total, gwinfo,
+                                                wrbwinfo)
             self.wholelen = len(towrite)
             sys.stderr.write(towrite)
             self.started = True
@@ -325,6 +389,7 @@ class RunTimer(EventHandler):
         """finalize display of runtimer"""
         if not self.started:
             return
+        self.erase_line()
         # display completed/total clients
         fmt = 'clush: %*d/%*d'
         if force_cr:
@@ -342,7 +407,7 @@ def signal_handler(signum, frame):
 
 def get_history_file():
     """Turn the history file path"""
-    return os.path.join(os.environ["HOME"], ".clush_history")
+    return join(os.environ["HOME"], ".clush_history")
 
 def readline_setup():
     """
@@ -357,10 +422,11 @@ def readline_setup():
     except IOError:
         pass
 
-def ttyloop(task, nodeset, timeout, display):
+def ttyloop(task, nodeset, timeout, display, remote):
     """Manage the interactive prompt to run command"""
     readline_avail = False
-    if task.default("USER_interactive"):
+    interactive = task.default("USER_interactive")
+    if interactive:
         try:
             import readline
             readline_setup()
@@ -374,8 +440,13 @@ def ttyloop(task, nodeset, timeout, display):
     ns = NodeSet(nodeset)
     ns_info = True
     cmd = ""
-    while task.default("USER_running") or cmd.lower() != 'quit':
+    while task.default("USER_running") or \
+            (interactive and cmd.lower() != 'quit'):
         try:
+            # Set SIGUSR1 handler if needed
+            if task.default("USER_handle_SIGUSR1"):
+                signal.signal(signal.SIGUSR1, signal_handler)
+
             if task.default("USER_interactive") and \
                     not task.default("USER_running"):
                 if ns_info:
@@ -385,11 +456,9 @@ def ttyloop(task, nodeset, timeout, display):
                 prompt = "clush> "
             else:
                 prompt = ""
-            # Set SIGUSR1 handler if needed
-            if task.default("USER_handle_SIGUSR1"):
-                signal.signal(signal.SIGUSR1, signal_handler)
             try:
                 cmd = raw_input(prompt)
+                assert cmd is not None, "Result of raw_input() is None!"
             finally:
                 signal.signal(signal.SIGUSR1, signal.SIG_IGN)
         except EOFError:
@@ -400,23 +469,33 @@ def ttyloop(task, nodeset, timeout, display):
                 continue
             return
         except KeyboardInterrupt, kbe:
+            # Caught SIGINT here (main thread) but the signal will also reach
+            # subprocesses (that will most likely kill them)
             if display.gather:
-                # Suspend task, so we can safely access its data from
-                # the main thread
+                # Suspend task, so we can safely access its data from here
                 task.suspend()
 
+                # If USER_running is not set, the task had time to finish,
+                # that could mean all subprocesses have been killed and all
+                # handlers have been processed.
+                if not task.default("USER_running"):
+                    # let's clush_excepthook handle the rest
+                    raise kbe
+
+                # If USER_running is set, the task didn't have time to finish
+                # its work, so we must print something for the user...
                 print_warn = False
 
                 # Display command output, but cannot order buffers by rc
                 nodesetify = lambda v: (v[0], NodeSet._fromlist1(v[1]))
                 for buf, nodeset in sorted(map(nodesetify, task.iter_buffers()),
-                                            cmp=bufnodeset_cmp):
+                                           cmp=bufnodeset_cmp):
                     if not print_warn:
                         print_warn = True
                         display.vprint_err(VERB_STD, \
                             "Warning: Caught keyboard interrupt!")
                     display.print_gather(nodeset, buf)
-                    
+
                 # Return code handling
                 verbexit = VERB_QUIET
                 if display.maxrc:
@@ -426,9 +505,13 @@ def ttyloop(task, nodeset, timeout, display):
                     ns_ok.add(NodeSet._fromlist1(nodelist))
                     if rc != 0:
                         # Display return code if not ok ( != 0)
-                        ns = NodeSet._fromlist1(nodelist)
-                        display.vprint_err(verbexit, \
-                            "clush: %s: exited with exit code %s" % (ns, rc))
+                        nsdisp = ns = NodeSet._fromlist1(nodelist)
+                        if display.verbosity >= VERB_QUIET and len(ns) > 1:
+                            nsdisp = "%s (%d)" % (ns, len(ns))
+                        msgrc = "clush: %s: exited with exit code %d" % (nsdisp,
+                                                                         rc)
+                        display.vprint_err(verbexit, msgrc)
+
                 # Add uncompleted nodeset to exception object
                 kbe.uncompleted_nodes = ns - ns_ok
 
@@ -441,18 +524,35 @@ def ttyloop(task, nodeset, timeout, display):
 
         if task.default("USER_running"):
             ns_reg, ns_unreg = NodeSet(), NodeSet()
-            for c in task._engine.clients():
-                if c.registered:
-                    ns_reg.add(c.key)
+            for client in task._engine.clients():
+                if client.registered:
+                    ns_reg.add(client.key)
                 else:
-                    ns_unreg.add(c.key)
+                    ns_unreg.add(client.key)
             if ns_unreg:
                 pending = "\nclush: pending(%d): %s" % (len(ns_unreg), ns_unreg)
             else:
                 pending = ""
-            display.vprint_err(VERB_QUIET, "clush: interrupt (^C to " \
-                "abort task)\nclush: in progress(%d): %s%s" % (len(ns_reg), \
-                ns_reg, pending))
+            display.vprint_err(VERB_QUIET,
+                               "clush: interrupt (^C to abort task)")
+            gws = task.gateways.keys()
+            if not gws:
+                display.vprint_err(VERB_QUIET,
+                                   "clush: in progress(%d): %s%s"
+                                   % (len(ns_reg), ns_reg, pending))
+            else:
+                display.vprint_err(VERB_QUIET,
+                                   "clush: in progress(%d): %s%s\n"
+                                   "clush: [tree] open gateways(%d): %s"
+                                   % (len(ns_reg), ns_reg, pending,
+                                      len(gws), NodeSet._fromlist1(gws)))
+            for gw, (chan, metaworkers) in task.gateways.iteritems():
+                act_targets = NodeSet.fromlist(mw.gwtargets[gw]
+                                               for mw in metaworkers)
+                if act_targets:
+                    display.vprint_err(VERB_QUIET,
+                                       "clush: [tree] in progress(%d) on %s: %s"
+                                       % (len(act_targets), gw, act_targets))
         else:
             cmdl = cmd.lower()
             try:
@@ -485,32 +585,35 @@ def ttyloop(task, nodeset, timeout, display):
                 continue
 
             if cmdl.startswith('!') and len(cmd.strip()) > 0:
-                run_command(task, cmd[1:], None, timeout, display)
+                run_command(task, cmd[1:], None, timeout, display, remote)
             elif cmdl != "quit":
                 if not cmd:
                     continue
                 if readline_avail:
                     readline.write_history_file(get_history_file())
-                run_command(task, cmd, ns, timeout, display)
+                run_command(task, cmd, ns, timeout, display, remote)
     return rc
 
-def _stdin_thread_start(stdin_port):
+def _stdin_thread_start(stdin_port, display):
     """Standard input reader thread entry point."""
-    # Note: read length should be larger and a multiple of 4096 for best
-    # performance to avoid excessive unreg/register of writer fd in
-    # engine; however, it shouldn't be too large.
-    bufsize = 4096 * 8
-    # thread loop: blocking read stdin + send messages to specified
-    #              port object
-    buf = sys.stdin.read(bufsize)
-    while buf:
-        # send message to specified port object (with ack)
-        stdin_port.msg(buf)
+    try:
+        # Note: read length should be larger and a multiple of 4096 for best
+        # performance to avoid excessive unreg/register of writer fd in
+        # engine; however, it shouldn't be too large.
+        bufsize = 4096 * 8
+        # thread loop: blocking read stdin + send messages to specified
+        #              port object
         buf = sys.stdin.read(bufsize)
+        while buf:
+            # send message to specified port object (with ack)
+            stdin_port.msg(buf)
+            buf = sys.stdin.read(bufsize)
+    except IOError, ex:
+        display.vprint(VERB_VERB, "stdin: %s" % ex)
     # send a None message to indicate EOF
     stdin_port.msg(None)
 
-def bind_stdin(worker):
+def bind_stdin(worker, display):
     """Create a stdin->port->worker binding: connect specified worker
     to stdin with the help of a reader thread and a ClusterShell Port
     object."""
@@ -522,13 +625,13 @@ def bind_stdin(worker):
     # Launch a dedicated thread to read stdin in blocking mode. Indeed stdin
     # can be a file, so we cannot use a WorkerSimple here as polling on file
     # may result in different behaviors depending on selected engine.
-    threading.Thread(None, _stdin_thread_start, args=(port,)).start()
+    threading.Thread(None, _stdin_thread_start, args=(port, display)).start()
 
-def run_command(task, cmd, ns, timeout, display):
+def run_command(task, cmd, ns, timeout, display, remote):
     """
     Create and run the specified command line, displaying
     results in a dshbak way when gathering is used.
-    """    
+    """
     task.set_default("USER_running", True)
 
     if display.verbosity >= VERB_VERB and task.topology:
@@ -542,57 +645,63 @@ def run_command(task, cmd, ns, timeout, display):
         else:
             handler = GatherOutputHandler(display)
 
-        if display.verbosity == VERB_STD or display.verbosity == VERB_VERB:
+        if display.verbosity in (VERB_STD, VERB_VERB) or \
+            (display.progress and display.verbosity > VERB_QUIET):
             handler.runtimer_init(task, len(ns))
-
-        worker = task.shell(cmd, nodes=ns, handler=handler, timeout=timeout)
+    elif display.progress and display.verbosity > VERB_QUIET:
+        handler = DirectProgressOutputHandler(display)
+        handler.runtimer_init(task, len(ns))
     else:
-        worker = task.shell(cmd, nodes=ns, handler=DirectOutputHandler(display),
-                            timeout=timeout)
+        # this is the simpler but faster output handler
+        handler = DirectOutputHandler(display)
+
+    worker = task.shell(cmd, nodes=ns, handler=handler, timeout=timeout,
+                        remote=remote)
     if ns is None:
         worker.set_key('LOCAL')
     if task.default("USER_stdin_worker"):
-        bind_stdin(worker)
- 
+        bind_stdin(worker, display)
+
     task.resume()
 
 def run_copy(task, sources, dest, ns, timeout, preserve_flag, display):
-    """
-    run copy command
-    """
+    """run copy command"""
     task.set_default("USER_running", True)
     task.set_default("USER_copies", len(sources))
 
+    if display.verbosity >= VERB_VERB and task.topology:
+        print Display.COLOR_RESULT_FMT % '-' * 15
+        print Display.COLOR_RESULT_FMT % task.topology,
+        print Display.COLOR_RESULT_FMT % '-' * 15
+
     copyhandler = CopyOutputHandler(display)
-    if display.verbosity == VERB_STD or display.verbosity == VERB_VERB:
+    if display.verbosity in (VERB_STD, VERB_VERB):
         copyhandler.runtimer_init(task, len(ns) * len(sources))
 
     # Sources check
     for source in sources:
-        if not os.path.exists(source):
+        if not exists(source):
             display.vprint_err(VERB_QUIET, "ERROR: file \"%s\" not found" % \
                                            source)
-            clush_exit(1)
+            clush_exit(1, task)
         task.copy(source, dest, ns, handler=copyhandler, timeout=timeout,
                   preserve=preserve_flag)
     task.resume()
 
 def run_rcopy(task, sources, dest, ns, timeout, preserve_flag, display):
-    """
-    run reverse copy command
-    """
+    """run reverse copy command"""
     task.set_default("USER_running", True)
     task.set_default("USER_copies", len(sources))
 
     # Sanity checks
-    if not os.path.exists(dest):
+    if not exists(dest):
         display.vprint_err(VERB_QUIET, "ERROR: directory \"%s\" not found" % \
                                        dest)
-        clush_exit(1)
-    if not os.path.isdir(dest):
+        clush_exit(1, task)
+    if not isdir(dest):
         display.vprint_err(VERB_QUIET, \
             "ERROR: destination \"%s\" is not a directory" % dest)
-        clush_exit(1)
+        clush_exit(1, task)
 
     copyhandler = CopyOutputHandler(display, True)
     if display.verbosity == VERB_STD or display.verbosity == VERB_VERB:
@@ -614,22 +723,29 @@ def set_fdlimit(fd_max, display):
             "%d -> %d" % (soft, rlim_max))
         resource.setrlimit(resource.RLIMIT_NOFILE, (rlim_max, hard))
 
-def clush_exit(status):
-    """Flush stdio buffers and exit script."""
-    for stream in [sys.stdout, sys.stderr]:
-        stream.flush()
-    # Use os._exit to avoid threads cleanup
-    os._exit(status)
+def clush_exit(status, task=None):
+    """Exit script, flushing stdio buffers and stopping ClusterShell task."""
+    if task:
+        # Clean, usual termination
+        task.abort()
+        task.join()
+        sys.exit(status)
+    else:
+        for stream in [sys.stdout, sys.stderr]:
+            stream.flush()
+        # Use os._exit to avoid threads cleanup
+        os._exit(status)
 
-def clush_excepthook(extype, value, traceback):
+def clush_excepthook(extype, exp, traceback):
     """Exceptions hook for clush: this method centralizes exception
     handling from main thread and from (possible) separate task thread.
     This hook has to be previously installed on startup by overriding
     sys.excepthook and task.excepthook."""
     try:
-        raise extype, value
+        raise exp
     except ClushConfigError, econf:
         print >> sys.stderr, "ERROR: %s" % econf
+        clush_exit(1)
     except KeyboardInterrupt, kbe:
         uncomp_nodes = getattr(kbe, 'uncompleted_nodes', None)
         if uncomp_nodes:
@@ -638,9 +754,9 @@ def clush_excepthook(extype, value, traceback):
         else:
             print >> sys.stderr, "Keyboard interrupt."
         clush_exit(128 + signal.SIGINT)
-    except OSError, value:
-        print >> sys.stderr, "ERROR: %s" % value
-        if value.errno == errno.EMFILE:
+    except OSError, exp:
+        print >> sys.stderr, "ERROR: %s" % exp
+        if exp.errno == errno.EMFILE:
             print >> sys.stderr, "ERROR: current `nofile' limits: " \
                 "soft=%d hard=%d" % resource.getrlimit(resource.RLIMIT_NOFILE)
         clush_exit(1)
@@ -648,14 +764,11 @@ def clush_excepthook(extype, value, traceback):
         clush_exit(handle_generic_error(exc))
 
     # Error not handled
-    task_self().default_excepthook(extype, value, traceback)
+    task_self().default_excepthook(extype, exp, traceback)
 
 def main():
     """clush script entry point"""
     sys.excepthook = clush_excepthook
-
-    # Default values
-    nodeset_base, nodeset_exclude = NodeSet(), NodeSet()
 
     #
     # Argument management
@@ -667,10 +780,11 @@ def main():
     parser.add_option("--nostdin", action="store_true", dest="nostdin",
                       help="don't watch for possible input from stdin")
 
+    parser.install_config_options('clush.conf(5)')
     parser.install_nodes_options()
     parser.install_display_options(verbose_options=True)
     parser.install_filecopy_options()
-    parser.install_ssh_options()
+    parser.install_connector_options()
 
     (options, args) = parser.parse_args()
 
@@ -692,26 +806,57 @@ def main():
     except ValueError, exc:
         parser.error("option mismatch (%s)" % exc)
 
-    #
-    # Compute the nodeset
-    #
-    if options.nodes:
-        nodeset_base = NodeSet.fromlist(options.nodes)
-    if options.exclude:
-        nodeset_exclude = NodeSet.fromlist(options.exclude)
-
     if options.groupsource:
         # Be sure -a/g -s source work as espected.
-        RESOLVER_STD_GROUP.default_sourcename = options.groupsource
+        std_group_resolver().default_source_name = options.groupsource
 
-    # FIXME: add public API to enforce engine
-    Task._std_default['engine'] = options.engine
+    # Compute the nodeset and warn for possible use of shell pathname
+    # expansion (#225)
+    wnodelist = []
+    xnodelist = []
+    if options.nodes:
+        wnodelist = [NodeSet(nodes) for nodes in options.nodes]
+
+    if options.exclude:
+        xnodelist = [NodeSet(nodes) for nodes in options.exclude]
+
+    for (opt, nodelist) in (('w', wnodelist), ('x', xnodelist)):
+        for nodes in nodelist:
+            if len(nodes) == 1 and exists(str(nodes)):
+                display.vprint_err(VERB_STD, "Warning: using '-%s %s' and "
+                                   "local path '%s' exists, was it expanded "
+                                   "by the shell?" % (opt, nodes, nodes))
+
+    # --hostfile support (#235)
+    for opt_hostfile in options.hostfile:
+        try:
+            fnodeset = NodeSet()
+            hostfile = open(opt_hostfile)
+            for line in hostfile.read().splitlines():
+                fnodeset.updaten(nodes for nodes in line.split())
+            hostfile.close()
+            display.vprint_err(VERB_DEBUG,
+                               "Using nodeset %s from hostfile %s"
+                               % (fnodeset, opt_hostfile))
+            wnodelist.append(fnodeset)
+        except IOError, exc:
+            # re-raise as OSError to be properly handled
+            errno, strerror = exc.args
+            raise OSError(errno, strerror, exc.filename)
+
+    # Instantiate target nodeset from command line and hostfile
+    nodeset_base = NodeSet.fromlist(wnodelist)
+    # Instantiate filter nodeset (command line only)
+    nodeset_exclude = NodeSet.fromlist(xnodelist)
+
+    # Specified engine prevails over default engine
+    DEFAULTS.engine = options.engine
 
     # Do we have nodes group?
     task = task_self()
     task.set_info("debug", config.verbosity >= VERB_DEBUG)
     if config.verbosity == VERB_DEBUG:
-        RESOLVER_STD_GROUP.set_verbosity(1)
+        std_group_resolver().set_verbosity(1)
     if options.nodes_all:
         all_nodeset = NodeSet.fromall()
         display.vprint(VERB_DEBUG, "Adding nodes from option -a: %s" % \
@@ -795,15 +940,29 @@ def main():
         task.set_info("debug", True)
         logging.basicConfig(level=logging.DEBUG)
         logging.debug("clush: STARTING DEBUG")
+    else:
+        logging.basicConfig(level=logging.CRITICAL)
 
     task.set_info("fanout", config.fanout)
 
-    if options.topofile:
+    if options.worker:
+        try:
+            if options.remote == 'no':
+                task.set_default('local_worker',
+                                 _load_workerclass(options.worker))
+            else:
+                task.set_default('distant_worker',
+                                 _load_workerclass(options.worker))
+        except (ImportError, AttributeError):
+            msg = "ERROR: Could not load worker '%s'" % options.worker
+            display.vprint_err(VERB_QUIET, msg)
+            clush_exit(1, task)
+
+    if options.topofile or task._default_tree_is_enabled():
         if config.verbosity >= VERB_VERB:
-            print Display.COLOR_RESULT_FMT % \
-                "Enabling TREE MODE (technology preview)"
-        task.set_default("auto_tree", True)
-        task.set_topology(options.topofile)
+            print Display.COLOR_RESULT_FMT % "TREE MODE enabled"
+        if options.topofile:
+            task.load_topology(options.topofile)
 
     if options.grooming_delay:
         if config.verbosity >= VERB_VERB:
@@ -817,11 +976,20 @@ def main():
         task.set_info("ssh_path", config.ssh_path)
     if config.ssh_options:
         task.set_info("ssh_options", config.ssh_options)
+    if config.scp_path:
+        task.set_info("scp_path", config.scp_path)
+    if config.scp_options:
+        task.set_info("scp_options", config.scp_options)
+    if config.rsh_path:
+        task.set_info("rsh_path", config.rsh_path)
+    if config.rcp_path:
+        task.set_info("rcp_path", config.rcp_path)
+    if config.rsh_options:
+        task.set_info("rsh_options", config.rsh_options)
 
     # Set detailed timeout values
     task.set_info("connect_timeout", config.connect_timeout)
-    command_timeout = config.command_timeout
-    task.set_info("command_timeout", command_timeout)
+    task.set_info("command_timeout", config.command_timeout)
 
     # Enable stdout/stderr separation
     task.set_default("stderr", not options.gatherall)
@@ -833,8 +1001,8 @@ def main():
     task.set_default("stderr_msgtree", False)
 
     # Set timeout at worker level when command_timeout is defined.
-    if command_timeout > 0:
-        timeout = command_timeout
+    if config.command_timeout > 0:
+        timeout = config.command_timeout
     else:
         timeout = -1
 
@@ -846,11 +1014,12 @@ def main():
         parser.error("--[r]copy option requires at least one argument")
     if options.copy:
         if not options.dest_path:
-            options.dest_path = os.path.dirname(os.path.abspath(args[0]))
+            # append '/' to clearly indicate a directory for tree mode
+            options.dest_path = join(dirname(abspath(args[0])), '')
         op = "copy sources=%s dest=%s" % (args, options.dest_path)
     elif options.rcopy:
         if not options.dest_path:
-            options.dest_path = os.path.dirname(os.path.abspath(args[0]))
+            options.dest_path = dirname(abspath(args[0]))
         op = "rcopy sources=%s dest=%s" % (args, options.dest_path)
     else:
         op = "command=\"%s\"" % ' '.join(args)
@@ -859,25 +1028,26 @@ def main():
     # and not task itself as set_info() is an asynchronous call.
     display.vprint(VERB_DEBUG, "clush: nodeset=%s fanout=%d [timeout " \
                    "conn=%.1f cmd=%.1f] %s" %  (nodeset_base, config.fanout,
-                                                task.info("connect_timeout"),
-                                                task.info("command_timeout"),
+                                                config.connect_timeout,
+                                                config.command_timeout,
                                                 op))
     if not task.default("USER_interactive"):
         if options.copy:
-            run_copy(task, args, options.dest_path, nodeset_base, 0,
+            run_copy(task, args, options.dest_path, nodeset_base, timeout,
                      options.preserve_flag, display)
         elif options.rcopy:
-            run_rcopy(task, args, options.dest_path, nodeset_base, 0,
+            run_rcopy(task, args, options.dest_path, nodeset_base, timeout,
                       options.preserve_flag, display)
         else:
-            run_command(task, ' '.join(args), nodeset_base, timeout, display)
+            run_command(task, ' '.join(args), nodeset_base, timeout, display,
+                        options.remote != 'no')
 
     if user_interaction:
-        ttyloop(task, nodeset_base, timeout, display)
+        ttyloop(task, nodeset_base, timeout, display, options.remote != 'no')
     elif task.default("USER_interactive"):
         display.vprint_err(VERB_QUIET, \
             "ERROR: interactive mode requires a tty")
-        clush_exit(1)
+        clush_exit(1, task)
 
     rc = 0
     if options.maxrc:
@@ -885,7 +1055,7 @@ def main():
         rc = task.max_retcode()
         if task.num_timeout() > 0:
             rc = 255
-    clush_exit(rc)
+    clush_exit(rc, task)
 
 if __name__ == '__main__':
     main()

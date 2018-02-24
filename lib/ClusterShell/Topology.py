@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2010, 2011, 2012)
-#  Contributor: Henri DOREAU <henri.doreau@gmail.com>
-#  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
+# Copyright CEA/DAM/DIF (2010-2015)
+#  Contributor: Henri DOREAU <henri.doreau@cea.fr>
+#  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #
 # This file is part of the ClusterShell library.
 #
@@ -41,8 +41,8 @@ according to the configuration file.
 
 This file must be written using the following syntax:
 
-# for now only [Main] tree is taken in account:
-[Main]
+# for now only [routes] tree is taken in account:
+[routes]
 admin: first_level_gateways[0-10]
 first_level_gateways[0-10]: second_level_gateways[0-100]
 second_level_gateways[0-100]: nodes[0-2000]
@@ -65,8 +65,7 @@ class TopologyNodeGroup(object):
     instances.
     """
     def __init__(self, nodeset=None):
-        """
-        """
+        """initialize a new TopologyNodeGroup instance."""
         # Base nodeset
         self.nodeset = nodeset
         # Parent TopologyNodeGroup (TNG) instance
@@ -171,7 +170,7 @@ class TopologyTree(object):
     """represent a simplified network topology as a tree of machines to use to
     connect to other ones
     """
-    class TreeIterator:
+    class TreeIterator(object):
         """efficient tool for tree-traversal"""
         def __init__(self, tree):
             """we do simply manage a stack with the remaining nodes"""
@@ -189,6 +188,7 @@ class TopologyTree(object):
                 raise StopIteration()
 
     def __init__(self):
+        """initialize a new TopologyTree instance."""
         self.root = None
         self.groups = []
 
@@ -212,6 +212,14 @@ class TopologyTree(object):
         if self.root is None:
             return '<TopologyTree instance (empty)>'
         return self.root.printable_subtree()
+
+    def find_nodegroup(self, node):
+        """Find TopologyNodeGroup from given node (helper to find new root)"""
+        for group in self.groups:
+            if node in group.nodeset:
+                return group
+        raise TopologyError('TopologyNodeGroup not found for node %s' % node)
+
 
 class TopologyRoute(object):
     """A single route between two nodesets"""
@@ -244,6 +252,7 @@ class TopologyRoutingTable(object):
     routes
     """
     def __init__(self):
+        """Initialize a new TopologyRoutingTable instance."""
         self._routes = []
         self.aggregated_src = NodeSet()
         self.aggregated_dst = NodeSet()
@@ -317,6 +326,7 @@ class TopologyGraph(object):
     relations between nodes.
     """
     def __init__(self):
+        """initialize a new TopologyGraph instance."""
         self._routing = TopologyRoutingTable()
         self._nodegroups = {}
         self._root = ''
@@ -368,7 +378,7 @@ class TopologyGraph(object):
             leaf = route.dst - aggregated_src
             if len(leaf) > 0:
                 self._nodegroups[str(leaf)] = TopologyNodeGroup(leaf)
-        
+
         # add the parent <--> children relationships
         for group in self._nodegroups.itervalues():
             dst_ns = self._routing.connected(group.nodeset)
@@ -393,7 +403,7 @@ class TopologyGraph(object):
             self._nodegroups[root] = group
         else:
             raise TopologyError('"%s" is not a valid root node!' % root)
-        
+
         self._root = root
 
 class TopologyParser(ConfigParser.ConfigParser):
@@ -403,7 +413,7 @@ class TopologyParser(ConfigParser.ConfigParser):
     # Comment
     <these machines> : <can reach these ones>
     """
-    def __init__(self):
+    def __init__(self, filename=None):
         """instance wide variables initialization"""
         ConfigParser.ConfigParser.__init__(self)
         self.optionxform = str # case sensitive parser
@@ -412,13 +422,20 @@ class TopologyParser(ConfigParser.ConfigParser):
         self.graph = None
         self._tree = None
 
+        if filename:
+            self.load(filename)
+
     def load(self, filename):
         """read a given topology configuration file and store the results in
         self._routes. Then build a propagation tree.
         """
         try:
             self.read(filename)
-            self._topology = self.items("Main")
+            if self.has_section("routes"):
+                self._topology = self.items("routes")
+            else:
+                # compat routes section [deprecated since v1.7]
+                self._topology = self.items("Main")
         except ConfigParser.Error:
             raise TopologyError(
                 'Invalid configuration file: %s' % filename)

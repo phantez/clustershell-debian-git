@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2009, 2010, 2011)
+# Copyright CEA/DAM/DIF (2009-2015)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -41,7 +41,7 @@ import errno
 import select
 import time
 
-from ClusterShell.Engine.Engine import Engine
+from ClusterShell.Engine.Engine import Engine, E_READ, E_WRITE
 from ClusterShell.Engine.Engine import EngineNotSupportedError
 from ClusterShell.Engine.Engine import EngineTimeoutException
 from ClusterShell.Worker.EngineClient import EngineClientEOF
@@ -67,13 +67,16 @@ class EngineEPoll(Engine):
         except AttributeError:
             raise EngineNotSupportedError(EngineEPoll.identifier)
 
+    def release(self):
+        """Release engine-specific resources."""
+        self.epolling.close()
+
     def _register_specific(self, fd, event):
-        """
-        Engine-specific fd registering. Called by Engine register.
-        """
-        if event & (Engine.E_READ | Engine.E_ERROR):
+        """Engine-specific fd registering. Called by Engine register."""
+        if event & E_READ:
             eventmask = select.EPOLLIN
-        elif event == Engine.E_WRITE:
+        else:
+            assert event & E_WRITE
             eventmask = select.EPOLLOUT
 
         self.epolling.register(fd, eventmask)
@@ -95,14 +98,8 @@ class EngineEPoll(Engine):
         """
         self._debug("MODSPEC fd=%d event=%x setvalue=%d" % (fd, event,
                                                             setvalue))
-        eventmask = 0
         if setvalue:
-            if event & (Engine.E_READ | Engine.E_ERROR):
-                eventmask = select.EPOLLIN
-            elif event == Engine.E_WRITE:
-                eventmask = select.EPOLLOUT
-
-            self.epolling.register(fd, eventmask)
+            self._register_specific(fd, event)
         else:
             self.epolling.unregister(fd)
 
@@ -110,7 +107,7 @@ class EngineEPoll(Engine):
         """
         Run epoll main loop.
         """
-        if timeout == 0:
+        if not timeout:
             timeout = -1
 
         start_time = time.time()
@@ -140,70 +137,62 @@ class EngineEPoll(Engine):
             for fd, event in evlist:
 
                 # get client instance
-                client, fdev = self._fd2client(fd)
+                client, stream = self._fd2client(fd)
                 if client is None:
                     continue
 
-                # set as current processed client
-                self._current_client = client
+                fdev = stream.evmask
+                sname = stream.name
+
+                # set as current processed stream
+                self._current_stream = stream
 
                 # check for poll error condition of some sort
                 if event & select.EPOLLERR:
-                    self._debug("EPOLLERR %s" % client)
-                    client._close_writer()
-                    self._current_client = None
+                    self._debug("EPOLLERR fd=%d sname=%s fdev=0x%x (%s)" % \
+                                (fd, sname, fdev, client))
+                    assert fdev & E_WRITE
+                    self.remove_stream(client, stream)
+                    self._current_stream = None
                     continue
 
                 # check for data to read
                 if event & select.EPOLLIN:
-                    #self._debug("EPOLLIN fd=%d %s" % (fd, client))
-                    assert fdev & (Engine.E_READ | Engine.E_ERROR)
-                    assert client._events & fdev
-                    self.modify(client, 0, fdev)
+                    assert fdev & E_READ
+                    assert stream.events & fdev, (stream.events, fdev)
+                    self.modify(client, sname, 0, fdev)
                     try:
-                        if fdev & Engine.E_READ:
-                            client._handle_read()
-                        else:
-                            client._handle_error()
+                        client._handle_read(sname)
                     except EngineClientEOF:
-                        self._debug("EngineClientEOF %s" % client)
-                        if fdev & Engine.E_READ:
-                            self.remove(client)
-                        self._current_client = None
+                        self._debug("EngineClientEOF %s %s" % (client, sname))
+                        self.remove_stream(client, stream)
+                        self._current_stream = None
                         continue
 
                 # or check for end of stream (do not handle both at the same
                 # time because handle_read() may perform a partial read)
                 elif event & select.EPOLLHUP:
-                    self._debug("EPOLLHUP fd=%d %s (r%s,e%s,w%s)" % (fd,
-                        client.__class__.__name__, client.fd_reader,
-                        client.fd_error, client.fd_writer))
-                    if fdev & Engine.E_READ:
-                        if client._events & Engine.E_ERROR:
-                            self.modify(client, 0, fdev)
-                        else:
-                            self.remove(client)
-                    else:
-                        if client._events & Engine.E_READ:
-                            self.modify(client, 0, fdev)
-                        else:
-                            self.remove(client)
+                    assert fdev & E_READ, "fdev 0x%x & E_READ" % fdev
+                    self._debug("EPOLLHUP fd=%d sname=%s %s (%s)" % \
+                                (fd, sname, client, client.streams))
+                    self.remove_stream(client, stream)
+                    self._current_stream = None
+                    continue
 
                 # check for writing
                 if event & select.EPOLLOUT:
-                    self._debug("EPOLLOUT fd=%d %s (r%s,e%s,w%s)" % (fd,
-                        client.__class__.__name__, client.fd_reader,
-                        client.fd_error, client.fd_writer))
-                    assert fdev == Engine.E_WRITE
-                    assert client._events & fdev
-                    self.modify(client, 0, fdev)
-                    client._handle_write()
+                    self._debug("EPOLLOUT fd=%d sname=%s %s (%s)" % \
+                                (fd, sname, client, client.streams))
+                    assert fdev & E_WRITE
+                    assert stream.events & fdev, (stream.events, fdev)
+                    self.modify(client, sname, 0, fdev)
+                    client._handle_write(sname)
 
-                self._current_client = None
+                self._current_stream = None
 
                 # apply any changes occured during processing
                 if client.registered:
-                    self.set_events(client, client._new_events)
+                    self.set_events(client, stream)
 
             # check for task runloop timeout
             if timeout > 0 and time.time() >= start_time + timeout:

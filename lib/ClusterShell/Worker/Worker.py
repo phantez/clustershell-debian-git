@@ -1,6 +1,6 @@
 #
-# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010, 2011)
-#  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
+# Copyright CEA/DAM/DIF (2007-2015)
+#  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #
 # This file is part of the ClusterShell library.
 #
@@ -36,10 +36,11 @@ ClusterShell worker interface.
 A worker is a generic object which provides "grouped" work in a specific task.
 """
 
+import inspect
+import warnings
+
 from ClusterShell.Worker.EngineClient import EngineClient
 from ClusterShell.NodeSet import NodeSet
-
-import os
 
 
 class WorkerException(Exception):
@@ -71,7 +72,7 @@ class Worker(object):
 
     The following public object variables are defined on some events, so you
     may find them useful in event handlers:
-        - worker.current_node [ev_read,ev_error,ev_hup]
+        - worker.current_node [ev_pickup,ev_read,ev_error,ev_hup]
             node/key concerned by event
         - worker.current_msg [ev_read]
             message just read (from stdout)
@@ -81,58 +82,88 @@ class Worker(object):
             return code just received
 
     Example of use:
+
         >>> from ClusterShell.Event import EventHandler
         >>> class MyOutputHandler(EventHandler):
         ...     def ev_read(self, worker):
-        ...             node = worker.current_node       
+        ...             node = worker.current_node
         ...             line = worker.current_msg
         ...             print "%s: %s" % (node, line)
-        ... 
+        ...
     """
+
+    # The following common stream names are recognized by the Task class.
+    # They can be changed per Worker, thus avoiding any Task buffering.
+    SNAME_STDIN  = 'stdin'
+    SNAME_STDOUT = 'stdout'
+    SNAME_STDERR = 'stderr'
+
     def __init__(self, handler):
-        """
-        Initializer. Should be called from derived classes.
-        """
+        """Initializer. Should be called from derived classes."""
         # Associated EventHandler object
-        self.eh = handler
+        self.eh = handler           #: associated :class:`.EventHandler`
         # Parent task (once bound)
-        self.task = None
-        self.started = False
+        self.task = None            #: worker's task when scheduled or None
+        self.started = False        #: set to True when worker has started
         self.metaworker = None
         self.metarefcnt = 0
         # current_x public variables (updated at each event accordingly)
-        self.current_node = None
-        self.current_msg = None
-        self.current_errmsg = None
-        self.current_rc = 0
+        self.current_node = None    #: set to node in event handler
+        self.current_msg = None     #: set to stdout message in event handler
+        self.current_errmsg = None  #: set to stderr message in event handler
+        self.current_rc = 0         #: set to return code in event handler
+        self.current_sname = None   #: set to stream name in event handler
 
     def _set_task(self, task):
-        """
-        Bind worker to task. Called by task.schedule()
-        """
+        """Bind worker to task. Called by task.schedule()."""
         if self.task is not None:
             # one-shot-only schedule supported for now
             raise WorkerError("worker has already been scheduled")
         self.task = task
 
     def _task_bound_check(self):
+        """Helper method to check that worker is bound to a task."""
         if not self.task:
             raise WorkerError("worker is not task bound")
 
     def _engine_clients(self):
-        """
-        Return a list of underlying engine clients.
-        """
+        """Return a list of underlying engine clients."""
         raise NotImplementedError("Derived classes must implement.")
 
-    def _on_start(self):
-        """
-        Starting worker.
-        """
+    # Event generators
+
+    def _on_start(self, key):
+        """Called on command start."""
+        self.current_node = key
+
         if not self.started:
             self.started = True
             if self.eh:
                 self.eh.ev_start(self)
+
+        if self.eh:
+            self.eh.ev_pickup(self)
+
+    def _on_rc(self, key, rc):
+        """Command return code received."""
+        self.current_node = key
+        self.current_rc = rc
+
+        self.task._rc_set(self, key, rc)
+
+        if self.eh:
+            self.eh.ev_hup(self)
+
+    def _on_written(self, key, bytes_count, sname):
+        """Notification of bytes written."""
+        # set node and stream name (compat only)
+        self.current_node = key
+        self.current_sname = sname
+
+        # generate event - for ev_written, also check for new signature (1.7)
+        # NOTE: add DeprecationWarning in 1.8 for old ev_written signature
+        if self.eh and len(inspect.getargspec(self.eh.ev_written)[0]) == 5:
+            self.eh.ev_written(self, key, sname, bytes_count)
 
     # Base getters
 
@@ -151,93 +182,79 @@ class Worker(object):
         raise NotImplementedError("Derived classes must implement.")
 
     def did_timeout(self):
-        """
-        Return whether this worker has aborted due to timeout.
-        """
+        """Return whether this worker has aborted due to timeout."""
         self._task_bound_check()
         return self.task._num_timeout_by_worker(self) > 0
+
+    def read(self, node=None, sname='stdout'):
+        """Read worker stream buffer.
+
+        Return stream read buffer of current worker.
+
+        Arguments:
+            node -- node name; can also be set to None for simple worker
+                    having worker.key defined (default is None)
+            sname -- stream name (default is 'stdout')
+        """
+        self._task_bound_check()
+        return self.task._msg_by_source(self, node, sname)
 
     # Base actions
 
     def abort(self):
-        """
-        Abort processing any action by this worker.
-        """
+        """Abort processing any action by this worker."""
         raise NotImplementedError("Derived classes must implement.")
 
     def flush_buffers(self):
-        """
-        Flush any messages associated to this worker.
-        """
+        """Flush any messages associated to this worker."""
         self._task_bound_check()
         self.task._flush_buffers_by_worker(self)
 
     def flush_errors(self):
-        """
-        Flush any error messages associated to this worker.
-        """
+        """Flush any error messages associated to this worker."""
         self._task_bound_check()
         self.task._flush_errors_by_worker(self)
 
 class DistantWorker(Worker):
-    """
-    Base class DistantWorker, which provides a useful set of setters/getters
-    to use with distant workers like ssh or pdsh.
+    """Base class DistantWorker.
+
+    DistantWorker provides a useful set of setters/getters to use with
+    distant workers like ssh or pdsh.
     """
 
-    def _on_node_msgline(self, node, msg):
-        """
-        Message received from node, update last* stuffs.
-        """
+    # Event generators
+
+    def _on_node_msgline(self, node, msg, sname):
+        """Message received from node, update last* stuffs."""
         # Maxoptimize this method as it might be called very often.
         task = self.task
         handler = self.eh
-
+        assert type(node) is not NodeSet # for testing
+        # set stream name
+        self.current_sname = sname
+        # update task msgtree
+        task._msg_add(self, node, sname, msg)
+        # generate event
         self.current_node = node
-        self.current_msg = msg
-
-        if task._msgtree is not None:   # don't waste time
-            task._msg_add((self, node), msg)
-
-        if handler is not None:
-            handler.ev_read(self)
-
-    def _on_node_errline(self, node, msg):
-        """
-        Error message received from node, update last* stuffs.
-        """
-        task = self.task
-        handler = self.eh
-
-        self.current_node = node
-        self.current_errmsg = msg
-
-        if task._errtree is not None:
-            task._errmsg_add((self, node), msg)
-
-        if handler is not None:
-            handler.ev_error(self)
+        if sname == self.SNAME_STDERR:
+            self.current_errmsg = msg
+            if handler is not None:
+                handler.ev_error(self)
+        else:
+            self.current_msg = msg
+            if handler is not None:
+                handler.ev_read(self)
 
     def _on_node_rc(self, node, rc):
-        """
-        Return code received from a node, update last* stuffs.
-        """
-        self.current_node = node
-        self.current_rc = rc
-
-        self.task._rc_set((self, node), rc)
-
-        if self.eh:
-            self.eh.ev_hup(self)
+        """Command return code received."""
+        Worker._on_rc(self, node, rc)
 
     def _on_node_timeout(self, node):
-        """
-        Update on node timeout.
-        """
+        """Update on node timeout."""
         # Update current_node to allow node resolution after ev_timeout.
         self.current_node = node
 
-        self.task._timeout_add((self, node))
+        self.task._timeout_add(self, node)
 
     def last_node(self):
         """
@@ -245,6 +262,7 @@ class DistantWorker(Worker):
         callback like ev_read().
         [DEPRECATED] use current_node
         """
+        warnings.warn("use current_node instead", DeprecationWarning)
         return self.current_node
 
     def last_read(self):
@@ -252,6 +270,8 @@ class DistantWorker(Worker):
         Get last (node, buffer), useful in an EventHandler.ev_read()
         [DEPRECATED] use (current_node, current_msg)
         """
+        warnings.warn("use current_node and current_msg instead",
+                      DeprecationWarning)
         return self.current_node, self.current_msg
 
     def last_error(self):
@@ -259,6 +279,8 @@ class DistantWorker(Worker):
         Get last (node, error_buffer), useful in an EventHandler.ev_error()
         [DEPRECATED] use (current_node, current_errmsg)
         """
+        warnings.warn("use current_node and current_errmsg instead",
+                      DeprecationWarning)
         return self.current_node, self.current_errmsg
 
     def last_retcode(self):
@@ -266,33 +288,30 @@ class DistantWorker(Worker):
         Get last (node, rc), useful in an EventHandler.ev_hup()
         [DEPRECATED] use (current_node, current_rc)
         """
+        warnings.warn("use current_node and current_rc instead",
+                      DeprecationWarning)
         return self.current_node, self.current_rc
 
     def node_buffer(self, node):
-        """
-        Get specific node buffer.
-        """
-        self._task_bound_check()
-        return self.task._msg_by_source((self, node))
-        
+        """Get specific node buffer."""
+        return self.read(node, self.SNAME_STDOUT)
+
     def node_error(self, node):
-        """
-        Get specific node error buffer.
-        """
-        self._task_bound_check()
-        return self.task._errmsg_by_source((self, node))
+        """Get specific node error buffer."""
+        return self.read(node, self.SNAME_STDERR)
 
     node_error_buffer = node_error
 
     def node_retcode(self, node):
         """
-        Get specific node return code. Raises a KeyError if command on
-        node has not yet finished (no return code available), or is
-        node is not known by this worker.
+        Get specific node return code.
+
+        :raises KeyError: command on node has not yet finished (no return code
+            available), or this node is not known by this worker
         """
         self._task_bound_check()
         try:
-            rc = self.task._rc_by_source((self, node))
+            rc = self.task._rc_by_source(self, node)
         except KeyError:
             raise KeyError(node)
         return rc
@@ -306,8 +325,8 @@ class DistantWorker(Worker):
         keys found in match_keys are returned.
         """
         self._task_bound_check()
-        for msg, keys in self.task._call_tree_matcher( \
-                            self.task._msgtree.walk, match_keys, self):
+        for msg, keys in self.task._call_tree_matcher(
+                self.task._msgtree(self.SNAME_STDOUT).walk, match_keys, self):
             yield msg, NodeSet.fromlist(keys)
 
     def iter_errors(self, match_keys=None):
@@ -317,8 +336,8 @@ class DistantWorker(Worker):
         keys found in match_keys are returned.
         """
         self._task_bound_check()
-        for msg, keys in self.task._call_tree_matcher( \
-                            self.task._errtree.walk, match_keys, self):
+        for msg, keys in self.task._call_tree_matcher(
+                self.task._msgtree(self.SNAME_STDERR).walk, match_keys, self):
             yield msg, NodeSet.fromlist(keys)
 
     def iter_node_buffers(self, match_keys=None):
@@ -326,16 +345,16 @@ class DistantWorker(Worker):
         Returns an iterator over each node and associated buffer.
         """
         self._task_bound_check()
-        return self.task._call_tree_matcher(self.task._msgtree.items,
-                                            match_keys, self)
+        return self.task._call_tree_matcher(
+            self.task._msgtree(self.SNAME_STDOUT).items, match_keys, self)
 
     def iter_node_errors(self, match_keys=None):
         """
         Returns an iterator over each node and associated error buffer.
         """
         self._task_bound_check()
-        return self.task._call_tree_matcher(self.task._errtree.items,
-                                            match_keys, self)
+        return self.task._call_tree_matcher(
+            self.task._msgtree(self.SNAME_STDERR).items, match_keys, self)
 
     def iter_retcodes(self, match_keys=None):
         """
@@ -368,210 +387,275 @@ class DistantWorker(Worker):
         self._task_bound_check()
         return self.task._iter_keys_timeout_by_worker(self)
 
-class WorkerSimple(EngineClient, Worker):
+class StreamClient(EngineClient):
+    """StreamWorker's default EngineClient.
+
+    StreamClient is the EngineClient subclass used by default by
+    StreamWorker. It handles some generic methods to pass data to the
+    StreamWorker.
     """
-    Implements a simple Worker being itself an EngineClient.
-    """
-
-    def __init__(self, file_reader, file_writer, file_error, key, handler,
-            stderr=False, timeout=-1, autoclose=False):
-        """
-        Initialize worker.
-        """
-        Worker.__init__(self, handler)
-        EngineClient.__init__(self, self, stderr, timeout, autoclose)
-
-        if key is None: # allow key=0
-            self.key = self
-        else:
-            self.key = key
-        if file_reader:
-            self.fd_reader = file_reader.fileno()
-        if file_error:
-            self.fd_error = file_error.fileno()
-        if file_writer:
-            self.fd_writer = file_writer.fileno()
-
-    def _engine_clients(self):
-        """
-        Return a list of underlying engine clients.
-        """
-        return [self]
-
-    def set_key(self, key):
-        """
-        Source key for this worker is free for use. Use this method to
-        set the custom source key for this worker.
-        """
-        self.key = key
 
     def _start(self):
-        """
-        Called on EngineClient start.
-        """
-        # call Worker._on_start()
-        self._on_start()
+        """Called on EngineClient start."""
+        assert not self.worker.started
+        self.worker._on_start(self.key)
         return self
 
-    def _read(self, size=65536):
-        """
-        Read data from process.
-        """
-        return EngineClient._read(self, size)
+    def _read(self, sname, size=65536):
+        """Read data from process."""
+        return EngineClient._read(self, sname, size)
 
-    def _readerr(self, size=65536):
-        """
-        Read error data from process.
-        """
-        return EngineClient._readerr(self, size)
-
-    def _close(self, abort, flush, timeout):
-        """
-        Close client. See EngineClient._close().
-        """
-        if flush and self._rbuf:
-            # We still have some read data available in buffer, but no
-            # EOL. Generate a final message before closing.
-            self.worker._on_msgline(self._rbuf)
-
-        if self.fd_reader:
-            os.close(self.fd_reader)
-        if self.fd_error:
-            os.close(self.fd_error)
-        if self.fd_writer:
-            os.close(self.fd_writer)
-
+    def _close(self, abort, timeout):
+        """Close client. See EngineClient._close()."""
+        EngineClient._close(self, abort, timeout)
         if timeout:
             assert abort, "abort flag not set on timeout"
-            self._on_timeout()
+            self.worker._on_timeout(self.key)
+        # return code not available
+        self.worker._on_rc(self.key, None)
 
-        if self.eh:
-            self.eh.ev_close(self)
+        if self.worker.eh:
+            self.worker.eh.ev_close(self.worker)
 
-    def _handle_read(self):
-        """
-        Engine is telling us there is data available for reading.
-        """
+    def _handle_read(self, sname):
+        """Engine is telling us there is data available for reading."""
         # Local variables optimization
         task = self.worker.task
-        msgline = self._on_msgline
+        msgline = self.worker._on_msgline
 
         debug = task.info("debug", False)
         if debug:
             print_debug = task.info("print_debug")
-            for msg in self._readlines():
+            for msg in self._readlines(sname):
                 print_debug(task, "LINE %s" % msg)
-                msgline(msg)
+                msgline(self.key, msg, sname)
         else:
-            for msg in self._readlines():
-                msgline(msg)
+            for msg in self._readlines(sname):
+                msgline(self.key, msg, sname)
 
-    def _handle_error(self):
-        """
-        Engine is telling us there is error available for reading.
-        """
-        task = self.worker.task
-        errmsgline = self._on_errmsgline
+    def _flush_read(self, sname):
+        """Called at close time to flush stream read buffer."""
+        stream = self.streams[sname]
+        if stream.readable() and stream.rbuf:
+            # We still have some read data available in buffer, but no
+            # EOL. Generate a final message before closing.
+            self.worker._on_msgline(self.key, stream.rbuf, sname)
 
-        debug = task.info("debug", False)
-        if debug:
-            print_debug = task.info("print_debug")
-            for msg in self._readerrlines():
-                print_debug(task, "LINE@STDERR %s" % msg)
-                errmsgline(msg)
+    def write(self, buf, sname=None):
+        """Write to writable stream(s)."""
+        if sname is not None:
+            self._write(sname, buf)
+            return
+        # sname not specified: "broadcast" to all writable streams...
+        for writer in self.streams.writers():
+            self._write(writer.name, buf)
+
+    def set_write_eof(self, sname=None):
+        """Set EOF flag to writable stream(s)."""
+        if sname is not None:
+            self._set_write_eof(sname)
+            return
+        # sname not specified: set eof flag on all writable streams...
+        for writer in self.streams.writers():
+            self._set_write_eof(writer.name)
+
+class StreamWorker(Worker):
+    """StreamWorker base class [v1.7+]
+
+    The StreamWorker class implements a base (but concrete) Worker that
+    can read and write to multiple streams. Unlike most other Workers,
+    it does not execute any external commands by itself. Rather, it
+    should be pre-bound to "streams", ie. file(s) or file descriptor(s),
+    using the two following methods:
+        >>> worker.set_reader('stream1', fd1)
+        >>> worker.set_writer('stream2', fd2)
+
+    Like other Workers, the StreamWorker instance should be associated
+    with a Task using task.schedule(worker). When the task engine is
+    ready to process the StreamWorker, all of its streams are being
+    processed together. For that reason, it is not possible to add new
+    readers or writers to a running StreamWorker (ie. task is running
+    and worker is already scheduled).
+
+    Configured readers will generate ev_read() events when data is
+    available for reading. So, the following additional public worker
+    variable is available and defines the stream name for the event:
+        >>> worker.current_sname [ev_read,ev_error]
+
+    Please note that ev_error() is called instead of ev_read() when the
+    stream name is 'stderr'. Indeed, all other stream names use
+    ev_read().
+
+    Configured writers will allow the use of the method write(), eg.
+    worker.write(data, 'stream2'), to write to the stream.
+    """
+
+    def __init__(self, handler, key=None, stderr=False, timeout=-1,
+                 autoclose=False, client_class=StreamClient):
+        Worker.__init__(self, handler)
+        if key is None: # allow key=0
+            key = self
+        self.clients = [client_class(self, key, stderr, timeout, autoclose)]
+
+    def set_reader(self, sname, sfile, retain=True, closefd=True):
+        """Add a readable stream to StreamWorker.
+
+        Arguments:
+            sname   -- the name of the stream (string)
+            sfile   -- the stream file or file descriptor
+            retain  -- whether the stream retains engine client
+                       (default is True)
+            closefd -- whether to close fd when the stream is closed
+                       (default is True)
+        """
+        if not self.clients[0].registered:
+            self.clients[0].streams.set_reader(sname, sfile, retain, closefd)
         else:
-            for msg in self._readerrlines():
-                errmsgline(msg)
+            raise WorkerError("cannot add new stream at runtime")
 
-    def last_read(self):
-        """
-        Read last msg, useful in an EventHandler.
-        """
-        return self.current_msg
+    def set_writer(self, sname, sfile, retain=True, closefd=True):
+        """Set a writable stream to StreamWorker.
 
-    def last_error(self):
+        Arguments:
+            sname -- the name of the stream (string)
+            sfile -- the stream file or file descriptor
+            retain  -- whether the stream retains engine client
+                       (default is True)
+            closefd -- whether to close fd when the stream is closed
+                       (default is True)
         """
-        Get last error message from event handler.
+        if not self.clients[0].registered:
+            self.clients[0].streams.set_writer(sname, sfile, retain, closefd)
+        else:
+            raise WorkerError("cannot add new stream at runtime")
+
+    def _engine_clients(self):
+        """Return a list of underlying engine clients."""
+        return self.clients
+
+    def set_key(self, key):
+        """Source key for this worker is free for use.
+
+        Use this method to set the custom source key for this worker.
         """
-        return self.current_errmsg
+        self.clients[0].key = key
 
-    def _on_msgline(self, msg):
-        """
-        Add a message.
-        """
-        # add last msg to local buffer
-        self.current_msg = msg
+    def _on_msgline(self, key, msg, sname):
+        """Add a message."""
+        # update task msgtree
+        self.task._msg_add(self, key, sname, msg)
 
-        # update task
-        self.task._msg_add((self, self.key), msg)
+        # set stream name
+        self.current_sname = sname
 
-        if self.eh:
-            self.eh.ev_read(self)
+        # generate event
+        if sname == 'stderr':
+            # add last msg to local buffer
+            self.current_errmsg = msg
+            if self.eh:
+                self.eh.ev_error(self)
+        else:
+            # add last msg to local buffer
+            self.current_msg = msg
+            if self.eh:
+                self.eh.ev_read(self)
 
-    def _on_errmsgline(self, msg):
-        """
-        Add a message.
-        """
-        # add last msg to local buffer
-        self.current_errmsg = msg
-
-        # update task
-        self.task._errmsg_add((self, self.key), msg)
-
-        if self.eh:
-            self.eh.ev_error(self)
-
-    def _on_rc(self, rc):
-        """
-        Set return code received.
-        """
-        self.current_rc = rc
-
-        self.task._rc_set((self, self.key), rc)
-
-        if self.eh:
-            self.eh.ev_hup(self)
-
-    def _on_timeout(self):
-        """
-        Update on timeout.
-        """
-        self.task._timeout_add((self, self.key))
+    def _on_timeout(self, key):
+        """Update on timeout."""
+        self.task._timeout_add(self, key)
 
         # trigger timeout event
         if self.eh:
             self.eh.ev_timeout(self)
 
-    def read(self):
+    def abort(self):
+        """Abort processing any action by this worker."""
+        self.clients[0].abort()
+
+    def read(self, node=None, sname='stdout'):
+        """Read worker stream buffer.
+
+        Return stream read buffer of current worker.
+
+        Arguments:
+            node -- node name; can also be set to None for simple worker
+                    having worker.key defined (default is None)
+            sname -- stream name (default is 'stdout')
         """
-        Read worker buffer.
+        return Worker.read(self, node or self.clients[0].key, sname)
+
+    def write(self, buf, sname=None):
+        """Write to worker.
+
+        If sname is specified, write to the associated stream,
+        otherwise write to all writable streams.
         """
-        self._task_bound_check()
-        for key, msg in self.task._call_tree_matcher(self.task._msgtree.items,
-                                                     worker=self):
-            assert key == self.key
-            return str(msg)
+        self.clients[0].write(buf, sname)
+
+    def set_write_eof(self, sname=None):
+        """
+        Tell worker to close its writer file descriptor once flushed.
+
+        Do not perform writes after this call. Like write(), sname can
+        be optionally specified to target a specific writable stream,
+        otherwise all writable streams are marked as EOF.
+        """
+        self.clients[0].set_write_eof(sname)
+
+class WorkerSimple(StreamWorker):
+    """WorkerSimple base class [DEPRECATED]
+
+    Implements a simple Worker to manage common process
+    stdin/stdout/stderr streams.
+
+    [DEPRECATED] use StreamWorker.
+    """
+
+    def __init__(self, file_reader, file_writer, file_error, key, handler,
+                 stderr=False, timeout=-1, autoclose=False, closefd=True,
+                 client_class=StreamClient):
+        """Initialize WorkerSimple worker."""
+        StreamWorker.__init__(self, handler, key, stderr, timeout, autoclose,
+                              client_class=client_class)
+        if file_reader:
+            self.set_reader('stdout', file_reader, closefd=closefd)
+        if file_error:
+            self.set_reader('stderr', file_error, closefd=closefd)
+        if file_writer:
+            self.set_writer('stdin', file_writer, closefd=closefd)
+        # keep reference of provided file objects during worker lifetime
+        self._filerefs = (file_reader, file_writer, file_error)
+
+    def error_fileno(self):
+        """Return the standard error reader file descriptor (integer)."""
+        return self.clients[0].streams['stderr'].fd
+
+    def reader_fileno(self):
+        """Return the reader file descriptor (integer)."""
+        return self.clients[0].streams['stdout'].fd
+
+    def writer_fileno(self):
+        """Return the writer file descriptor as an integer."""
+        return self.clients[0].streams['stdin'].fd
+
+    def last_read(self):
+        """
+        Get last read message.
+
+        [DEPRECATED] use current_msg
+        """
+        warnings.warn("use current_msg instead", DeprecationWarning)
+        return self.current_msg
+
+    def last_error(self):
+        """
+        Get last error message.
+
+        [DEPRECATED] use current_errmsg
+        """
+        warnings.warn("use current_errmsg instead", DeprecationWarning)
+        return self.current_errmsg
 
     def error(self):
-        """
-        Read worker error buffer.
-        """
-        self._task_bound_check()
-        for key, msg in self.task._call_tree_matcher(self.task._errtree.items,
-                                                     worker=self):
-            assert key == self.key
-            return str(msg)
-
-    def write(self, buf):
-        """
-        Write to worker.
-        """
-        self._write(buf)
-
-    def set_write_eof(self):
-        """
-        Tell worker to close its writer file descriptor once flushed. Do not
-        perform writes after this call.
-        """
-        self._set_write_eof()
-
+        """Read worker error buffer."""
+        return self.read(sname='stderr')
