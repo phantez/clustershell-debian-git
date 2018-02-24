@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2008, 2009, 2010, 2011, 2012)
-#  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
+# Copyright CEA/DAM/DIF (2008-2016)
+#  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #
 # This file is part of the ClusterShell library.
 #
@@ -39,8 +39,10 @@ ClusterShell library which implements some features of the NodeSet
 and RangeSet classes.
 """
 
+import logging
 import math
 import sys
+import random
 
 from ClusterShell.CLI.Error import GENERIC_ERRORS, handle_generic_error
 from ClusterShell.CLI.OptionParser import OptionParser
@@ -170,7 +172,7 @@ def nodeset():
     group_resolver = std_group_resolver()
 
     if options.debug:
-        group_resolver.set_verbosity(1)
+        logging.basicConfig(level=logging.DEBUG)
 
     # Check for command presence
     cmdcount = int(options.count) + int(options.expand) + \
@@ -284,10 +286,18 @@ def nodeset():
     if options.axis:
         if not options.axis.startswith('-'):
             # axis are 1-indexed in nodeset CLI (0 ignored)
-            xset.fold_axis = tuple(x - 1 for x in RangeSet(options.axis) if x > 0)
+            xset.fold_axis = tuple(x-1 for x in RangeSet(options.axis) if x > 0)
         else:
             # negative axis index (only single number supported)
             xset.fold_axis = [int(options.axis)]
+
+    if options.pick and options.pick < len(xset):
+        # convert to string for sample as nsiter() is slower for big
+        # nodesets; and we assume options.pick will remain small-ish
+        keep = random.sample(xset, options.pick)
+        # explicit class_set creation and str() convertion for RangeSet
+        keep = class_set(','.join([str(x) for x in keep]))
+        xset.intersection_update(keep)
 
     fmt = options.output_format # default to '%s'
 
@@ -295,7 +305,14 @@ def nodeset():
     if options.expand:
         xsubres = lambda x: separator.join((fmt % s for s in x.striter()))
     elif options.fold:
-        xsubres = lambda x: fmt % x
+        # Special case when folding using NodeSet and format is set (#277)
+        if class_set is NodeSet and fmt != '%s':
+            # Create a new set after format has been applied to each node
+            xset = class_set._fromlist1((fmt % xnodestr for xnodestr in xset),
+                                        autostep=xset.autostep)
+            xsubres = lambda x: x
+        else:
+            xsubres = lambda x: fmt % x
     elif options.regroup:
         xsubres = lambda x: fmt % x.regroup(options.groupsource,
                                             noprefix=options.groupbase)

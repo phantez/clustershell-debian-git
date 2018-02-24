@@ -33,7 +33,6 @@ class NodeSetErrorTest(unittest.TestCase):
 
     def testBadRangeUsages(self):
         """test NodeSet parse errors in range"""
-        self._testNS("", NodeSetParseError)
         self._testNS("nova[]", NodeSetParseRangeError)
         self._testNS("nova[-]", NodeSetParseRangeError)
         self._testNS("nova[A]", NodeSetParseRangeError)
@@ -110,6 +109,11 @@ class NodeSetErrorTest(unittest.TestCase):
         self._testNS("x[1-30]p4-9]", NodeSetParseError)
         self._testNS("xazer][1-30]p[4-9]", NodeSetParseError)
         self._testNS("xa[[zer[1-30]p[4-9]", NodeSetParseRangeError)
+        # entirely numeric hostnames are not allowed
+        self._testNS("[0-10]", NodeSetParseError)
+        self._testNS("0[0-10]", NodeSetParseError)
+        self._testNS("[0-10]0", NodeSetParseError)
+        self._testNS("0[0-10]0", NodeSetParseError)
 
     def testTypeSanityCheck(self):
         """test NodeSet input type sanity check"""

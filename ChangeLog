@@ -1,3 +1,42 @@
+2016-05-22 S. Thiell <sthiell@stanford.edu>
+
+	* EngineClient.py: handle broken pipe on write() (ticket #196).
+
+2016-04-24 S. Thiell <sthiell@stanford.edu>
+
+	* NodeSet.py: allow empty string as valid argument for empty NodeSet
+	objects (ticket #294).
+
+2016-02-28 S. Thiell <sthiell@stanford.edu>
+
+	* Version 1.7.1 released.
+
+2016-02-27 S. Thiell <sthiell@stanford.edu>
+
+	* Worker/Tree.py: implement tree mode reverse copy using tar commands to
+	fix clush --rcopy (ticket #290).
+
+	* Communication.py: remove 76-char base64 encoding fixed length
+	restriction for tree XML payload communication. The default max length is
+	now 64K, which gives good results. The environment variable
+	'CLUSTERSHELL_GW_B64_LINE_LENGTH' is propagated to gateways and may be
+	used to override this value.
+
+2016-02-12 S. Thiell <sthiell@stanford.edu>
+
+	* RangeSet.py and NodeSet.py: fix bad 0-padding handling by RangeSetND or
+	NodeSet objects in nD (ticket #286).
+
+2016-02-09 S. Thiell <sthiell@stanford.edu>
+
+	* NodeSet.py: fix parser issue when brackets were used with nodeset
+	starting with a digit (ticket #284).
+
+2015-11-30 S. Thiell <sthiell@stanford.edu>
+
+	* CLI/Nodeset.py: fix --output-format / -O when folding (-f) by applying
+	the provided format to each node (ticket #277).
+
 2015-11-10 S. Thiell <sthiell@stanford.edu>
 
 	* Version 1.7 released.

@@ -10,13 +10,18 @@ node groups, at the command line level. As it is very user-friendly and
 efficient, the *nodeset* command can quickly improve traditional cluster
 shell scripts. It is also full-featured as it provides most of the
 :class:`.NodeSet` and :class:`.RangeSet` class methods (see also
-:ref:`class-NodeSet`, and :ref:`class-RangeSet`). Most of the examples in this
-section are using simple indexed node sets, however, *nodeset* supports
-multidimensional node sets, like *dc[1-2]n[1-99]*, introduced in version 1.7
-(see :ref:`class-RangeSetND` for more info).
+:ref:`class-NodeSet`, and :ref:`class-RangeSet`).
 
-This section will guide you through the basics and also advanced features of
-*nodeset*.
+
+The *nodeset* command supports RFC 1123 (which defines naming standards for
+host names) except that a node name can't be entirely numeric.
+
+Most of the examples in this section are using simple indexed node sets,
+however, *nodeset* supports multidimensional node sets, like *dc[1-2]n[1-99]*,
+introduced in version 1.7 (see :ref:`class-RangeSetND` for more info).
+
+This section will guide you through the basics and also more advanced features
+of *nodeset*.
 
 Usage basics
 ^^^^^^^^^^^^
@@ -171,28 +176,29 @@ change::
 
 The ``-O, --output-format`` option can be used to format output results of
 most *nodeset* commands. The string passed to this option is used as a base
-format pattern applied to each result. The default format string is *"%s"*.
-Formatting is performed using the Python builtin string formatting operator,
-so you must use one format operator of the right type (*%s* is guaranteed to
-work in all cases). A simple example when using the fold command is shown
-below::
-
-    $ nodeset --output-format='%s-ipmi' -f node1 node2 node3
-    node[1-3]-ipmi
-
-Another output formatting example when using the expand command::
+format pattern applied to each node or each result (depending on the command
+and other options requested). The default format string is *"%s"*.  Formatting
+is performed using the Python builtin string formatting operator, so you must
+use one format operator of the right type (*%s* is guaranteed to work in all
+cases). Here is an output formatting example when using the expand command::
 
     $ nodeset --output-format='%s-ipmi' -e node[1-2]x[1-2]
     node1x1-ipmi node1x2-ipmi node2x1-ipmi node2x2-ipmi
 
-Output formatting and separator may be combined when using the expand
-command::
+Output formatting and separator combined can be useful when using the expand
+command, as shown here::
 
     $ nodeset -O '%s-ipmi' -S '\n' -e node[1-2]x[1-2]
     node1x1-ipmi
     node1x2-ipmi
     node2x1-ipmi
     node2x2-ipmi
+
+When using the output formatting option along with the folding command, the
+format is applied to each node but the result is still folded::
+
+    $ nodeset -O '%s-ipmi' -f mgmt1 mgmt2 login[1-4]
+    login[1-4]-ipmi,mgmt[1-2]-ipmi
 
 
 .. _nodeset-stepping:
@@ -416,9 +422,10 @@ patterns" (inherited from :class:`.NodeSet` extended pattern feature, see
 Special operations
 ^^^^^^^^^^^^^^^^^^
 
-Three special operations are currently available: node set slicing, splitting
-on a predefined node count and splitting non-contiguous subsets. There are all
-explained below.
+A few special operations are currently available: node set slicing, splitting
+on a predefined node count, splitting non-contiguous subsets, choosing fold
+axis (for multidimensional node sets) and picking N nodes randomly. They are
+all explained below.
 
 Slicing
 """""""
@@ -559,6 +566,19 @@ useful to fold along the last axis whatever number of dimensions used::
 
     $ nodeset --axis=-1 -f comp-[1-2]-[1-36],login-[1-2]
     comp-1-[1-36],comp-2-[1-36],login-[1-2]
+
+.. _nodeset-pick:
+
+Picking N node(s) at random
+"""""""""""""""""""""""""""
+
+Use ``--pick`` with a maximum number of nodes you wish to pick randomly from
+the resulting node set (or from the resulting range set with ``-R``)::
+
+    $ nodeset --pick=1 -f node11 node12 node13
+    node12
+    $ nodeset --pick=2 -f node11 node12 node13
+    node[11,13]
 
 
 .. _nodeset-groups:

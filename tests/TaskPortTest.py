@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ClusterShell test suite
-# Written by S. Thiell 2009-12-19
+# Written by S. Thiell
 
 
 """Unit test for ClusterShell inter-Task msg"""
@@ -8,6 +8,7 @@
 import pickle
 import sys
 import threading
+import time
 import unittest
 
 sys.path.insert(0, '../lib')
@@ -23,7 +24,7 @@ class TaskPortTest(unittest.TestCase):
 
     def testPortMsg1(self):
         """test port msg from main thread to task"""
-        
+
         TaskPortTest.got_msg = False
 
         # create task in new thread
@@ -46,21 +47,39 @@ class TaskPortTest(unittest.TestCase):
         self.assert_(TaskPortTest.got_msg)
 
     def testPortRemove(self):
-        """test port remove [private as of 1.2]"""
-        
-        task = Task()
+        """test remove_port()"""
 
         class PortHandler(EventHandler):
             def ev_msg(self, port, msg):
                 pass
 
+        task = Task() # new thread
         port = task.port(handler=PortHandler(), autoclose=True)
         task.resume()
-        task._remove_port(port)
+        task.remove_port(port)
         task_wait()
 
+    def testPortClosed(self):
+        """test port msg on closed port"""
+        # test sending message to "stillborn" port
+        self.port_msg_result = None
 
-if __name__ == '__main__':
-    suite = unittest.TestLoader().loadTestsFromTestCase(TaskPortTest)
-    unittest.TextTestRunner(verbosity=2).run(suite)
+        # thread will wait a bit and send a port message
+        def test_thread_start(port, test):
+            time.sleep(0.5)
+            test.port_msg_result = port.msg('foobar')
 
+        class TestHandler(EventHandler):
+            pass
+
+        task = task_self()
+        test_handler = TestHandler()
+        task.timer(0.2, handler=test_handler, autoclose=False)
+        port = task.port(handler=test_handler, autoclose=True)
+        thread = threading.Thread(None, test_thread_start, args=(port, self))
+        thread.setDaemon(True)
+        thread.start()
+        task.resume()
+        task.abort(kill=True) # will remove_port()
+        thread.join()
+        self.assertEqual(self.port_msg_result, False) # test vs. None and True

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright CEA/DAM/DIF (2007-2015)
+# Copyright CEA/DAM/DIF (2007-2016)
 #  Contributor: Stephane THIELL <sthiell@stanford.edu>
 #
 # This file is part of the ClusterShell library.
@@ -53,6 +53,7 @@ import sys
 import signal
 import time
 import threading
+import random
 
 from ClusterShell.Defaults import DEFAULTS, _load_workerclass
 from ClusterShell.CLI.Config import ClushConfig, ClushConfigError
@@ -597,10 +598,11 @@ def ttyloop(task, nodeset, timeout, display, remote):
 def _stdin_thread_start(stdin_port, display):
     """Standard input reader thread entry point."""
     try:
-        # Note: read length should be larger and a multiple of 4096 for best
-        # performance to avoid excessive unreg/register of writer fd in
-        # engine; however, it shouldn't be too large.
-        bufsize = 4096 * 8
+        # Note: read length should be as large as possible for performance
+        # yet not too large to not introduce artificial latency.
+        # 64k seems to be perfect with an openssh backend (they issue 64k
+        # reads) ; could consider making it an option for e.g. gsissh.
+        bufsize = 64 * 1024
         # thread loop: blocking read stdin + send messages to specified
         #              port object
         buf = sys.stdin.read(bufsize)
@@ -625,7 +627,12 @@ def bind_stdin(worker, display):
     # Launch a dedicated thread to read stdin in blocking mode. Indeed stdin
     # can be a file, so we cannot use a WorkerSimple here as polling on file
     # may result in different behaviors depending on selected engine.
-    threading.Thread(None, _stdin_thread_start, args=(port, display)).start()
+    stdin_thread = threading.Thread(None, _stdin_thread_start, args=(port, display))
+    # setDaemon because we're sometimes left with data that has been read and
+    # ssh connection already closed.
+    # Syntax for compat with Python < 2.6
+    stdin_thread.setDaemon(True)
+    stdin_thread.start()
 
 def run_command(task, cmd, ns, timeout, display, remote):
     """
@@ -633,11 +640,6 @@ def run_command(task, cmd, ns, timeout, display, remote):
     results in a dshbak way when gathering is used.
     """
     task.set_default("USER_running", True)
-
-    if display.verbosity >= VERB_VERB and task.topology:
-        print Display.COLOR_RESULT_FMT % '-' * 15
-        print Display.COLOR_RESULT_FMT % task.topology,
-        print Display.COLOR_RESULT_FMT % '-' * 15
 
     if (display.gather or display.line_mode) and ns is not None:
         if display.gather and display.line_mode:
@@ -669,11 +671,6 @@ def run_copy(task, sources, dest, ns, timeout, preserve_flag, display):
     task.set_default("USER_running", True)
     task.set_default("USER_copies", len(sources))
 
-    if display.verbosity >= VERB_VERB and task.topology:
-        print Display.COLOR_RESULT_FMT % '-' * 15
-        print Display.COLOR_RESULT_FMT % task.topology,
-        print Display.COLOR_RESULT_FMT % '-' * 15
-
     copyhandler = CopyOutputHandler(display)
     if display.verbosity in (VERB_STD, VERB_VERB):
         copyhandler.runtimer_init(task, len(ns) * len(sources))
@@ -681,8 +678,8 @@ def run_copy(task, sources, dest, ns, timeout, preserve_flag, display):
     # Sources check
     for source in sources:
         if not exists(source):
-            display.vprint_err(VERB_QUIET, "ERROR: file \"%s\" not found" % \
-                                           source)
+            display.vprint_err(VERB_QUIET,
+                               'ERROR: file "%s" not found' % source)
             clush_exit(1, task)
         task.copy(source, dest, ns, handler=copyhandler, timeout=timeout,
                   preserve=preserve_flag)
@@ -695,12 +692,12 @@ def run_rcopy(task, sources, dest, ns, timeout, preserve_flag, display):
 
     # Sanity checks
     if not exists(dest):
-        display.vprint_err(VERB_QUIET, "ERROR: directory \"%s\" not found" % \
-                                       dest)
+        display.vprint_err(VERB_QUIET,
+                           'ERROR: directory "%s" not found' % dest)
         clush_exit(1, task)
     if not isdir(dest):
-        display.vprint_err(VERB_QUIET, \
-            "ERROR: destination \"%s\" is not a directory" % dest)
+        display.vprint_err(VERB_QUIET,
+                           'ERROR: destination "%s" is not a directory' % dest)
         clush_exit(1, task)
 
     copyhandler = CopyOutputHandler(display, True)
@@ -708,20 +705,25 @@ def run_rcopy(task, sources, dest, ns, timeout, preserve_flag, display):
         copyhandler.runtimer_init(task, len(ns) * len(sources))
     for source in sources:
         task.rcopy(source, dest, ns, handler=copyhandler, timeout=timeout,
-                   preserve=preserve_flag)
+                   stderr=True, preserve=preserve_flag)
     task.resume()
 
 def set_fdlimit(fd_max, display):
     """Make open file descriptors soft limit the max."""
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     if hard < fd_max:
-        display.vprint(VERB_DEBUG, "Warning: Consider increasing max open " \
-            "files hard limit (%d)" % hard)
+        msgfmt = 'Warning: fd_max set to %d but max open files hard limit is %d'
+        display.vprint_err(VERB_VERB, msgfmt % (fd_max, hard))
     rlim_max = min(hard, fd_max)
     if soft != rlim_max:
-        display.vprint(VERB_DEBUG, "Modifying max open files soft limit: " \
-            "%d -> %d" % (soft, rlim_max))
-        resource.setrlimit(resource.RLIMIT_NOFILE, (rlim_max, hard))
+        msgfmt = 'Changing max open files soft limit from %d to %d'
+        display.vprint(VERB_DEBUG, msgfmt % (soft, rlim_max))
+        try:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (rlim_max, hard))
+        except (ValueError, resource.error), exc:
+            # Most probably the requested limit exceeds the system imposed limit
+            msgfmt = 'Warning: Failed to set max open files limit to %d (%s)'
+            display.vprint_err(VERB_VERB, msgfmt % (rlim_max, exc))
 
 def clush_exit(status, task=None):
     """Exit script, flushing stdio buffers and stopping ClusterShell task."""
@@ -731,8 +733,12 @@ def clush_exit(status, task=None):
         task.join()
         sys.exit(status)
     else:
+        # Best effort cleanup if no task is set
         for stream in [sys.stdout, sys.stderr]:
-            stream.flush()
+            try:
+                stream.flush()
+            except IOError:
+                pass
         # Use os._exit to avoid threads cleanup
         os._exit(status)
 
@@ -886,6 +892,15 @@ def main():
     if len(nodeset_base) < 1:
         parser.error('No node to run on.')
 
+    if options.pick and options.pick < len(nodeset_base):
+        # convert to string for sample as nsiter() is slower for big
+        # nodesets; and we assume options.pick will remain small-ish
+        keep = random.sample(nodeset_base, options.pick)
+        nodeset_base.intersection_update(','.join(keep))
+        if config.verbosity >= VERB_VERB:
+            msg = "Picked random nodes: %s" % nodeset_base
+            print Display.COLOR_RESULT_FMT % msg
+
     # Set open files limit.
     set_fdlimit(config.fd_max, display)
 
@@ -959,16 +974,23 @@ def main():
             clush_exit(1, task)
 
     if options.topofile or task._default_tree_is_enabled():
-        if config.verbosity >= VERB_VERB:
-            print Display.COLOR_RESULT_FMT % "TREE MODE enabled"
         if options.topofile:
             task.load_topology(options.topofile)
+        if config.verbosity >= VERB_VERB:
+            roots = len(task.topology.root.nodeset)
+            gws = task.topology.inner_node_count() - roots
+            msg = "enabling tree topology (%d gateways)" % gws
+            print >> sys.stderr, "clush: %s" % msg
 
     if options.grooming_delay:
         if config.verbosity >= VERB_VERB:
-            print Display.COLOR_RESULT_FMT % ("Grooming delay: %f" % \
+            msg = Display.COLOR_RESULT_FMT % ("Grooming delay: %f" %
                                               options.grooming_delay)
+            print >> sys.stderr, msg
         task.set_info("grooming_delay", options.grooming_delay)
+    elif options.rcopy:
+        # By default, --rcopy should inhibit grooming
+        task.set_info("grooming_delay", 0)
 
     if config.ssh_user:
         task.set_info("ssh_user", config.ssh_user)
@@ -1032,6 +1054,10 @@ def main():
                                                 config.command_timeout,
                                                 op))
     if not task.default("USER_interactive"):
+        if display.verbosity >= VERB_DEBUG and task.topology:
+            print Display.COLOR_RESULT_FMT % '-' * 15
+            print Display.COLOR_RESULT_FMT % task.topology,
+            print Display.COLOR_RESULT_FMT % '-' * 15
         if options.copy:
             run_copy(task, args, options.dest_path, nodeset_base, timeout,
                      options.preserve_flag, display)
