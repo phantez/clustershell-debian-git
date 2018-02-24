@@ -1,0 +1,115 @@
+ -------------------------------
+ ClusterShell 1.3 Python Library
+ -------------------------------
+
+ClusterShell is an event-based python library to execute commands on local or
+distant cluster nodes in parallel depending on the selected engine and worker
+mechanisms.
+
+This is the source tarball. When possible, please use the RPM distribution.
+
+ -------------------
+ Requirements (v1.3)
+ -------------------
+
+ * OpenSSH (ssh/scp)
+
+ * Python 2.x (x >= 4) with select.poll available (eg. Linux)
+
+ ------------------------
+ Supported Engine workers
+ ------------------------
+
+ Two workers are supported as of version 1.1:
+
+ * Ssh (default, requires ssh): support writes, fanout and reliable timeouts
+
+ * Pdsh (optional, requires pdsh): read only, fanout, no reliable timeouts
+    Get pdsh @ https://computing.llnl.gov/linux/pdsh.html
+
+ Why the pdsh worker doesn't have "reliable timeout" support: when a timeout
+ value is used, pdsh shows no difference between a process returning rc=0 and
+ a process that timed out. It works for processes returning rc!=0 because pdsh
+ displays the return code. That's why it is now recommended to use the Ssh
+ worker when you want reliable timeout support.
+
+ ------------------------
+ Installation from source
+ ------------------------
+
+In the source directory, please type :
+
+    # python setup.py install
+
+ ----------
+ Test Suite
+ ----------
+
+Regression testing scripts are available in the 'tests' directory:
+
+    $ cd tests
+    $ ./run_testsuite.py -vv
+
+ --------------
+ Documentation
+ -------------
+
+Local API documentation is available, just type:
+
+    $ pydoc ClusterShell
+
+Online API documentation (epydoc) is available here:
+
+    http://clustershell.sourceforge.net/csdoc
+
+ --------------------------
+ ClusterShell interactively
+ --------------------------
+
+Python 2.4.3 (#1, May 24 2008, 13:57:05) 
+[GCC 4.1.2 20070626 (Red Hat 4.1.2-14)] on linux2
+Type "help", "copyright", "credits" or "license" for more information.
+>>> from ClusterShell.Task import task_self
+>>> from ClusterShell.NodeSet import NodeSet
+>>> task = task_self()
+>>> task.shell("/bin/uname -r", nodes="linux[4-6,32-39]")
+>>> task.resume()
+>>> for buf, key in task.iter_buffers():
+...     print NodeSet.fromlist(key), buf
+... 
+linux[32-39] 2.6.18-92.1.13.el5
+
+linux[4-6] 2.6.18-53.1.13.el5.l47
+
+ -----
+ Links
+ -----
+
+Main web site:
+
+    http://clustershell.sourceforge.net
+
+Sourceforge.net project page:
+
+    http://sourceforge.net/projects/clustershell
+
+Trac wiki and issue tracking system:
+
+    https://sourceforge.net/apps/trac/clustershell
+
+Python Package Index (PyPI) link:
+
+    http://pypi.python.org/pypi/ClusterShell
+
+ClusterShell was first created for Shine, the Lustre Administration Utility:
+
+    http://lustre-shine.sourceforge.net
+
+ -------
+ Authors
+ -------
+
+Stephane Thiell           <stephane.thiell@cea.fr>
+Aurelien Degremont     <aurelien.degremont@cea.fr>
+
+CEA/DAM 2010 - http://www-hpc.cea.fr
