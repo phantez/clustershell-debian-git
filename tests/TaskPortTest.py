@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # ClusterShell test suite
 # Written by S. Thiell 2009-12-19
-# $Id: TaskPortTest.py 235 2010-02-25 21:55:09Z st-cea $
 
 
 """Unit test for ClusterShell inter-Task msg"""

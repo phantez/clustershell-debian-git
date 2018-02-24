@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010, 2011)
+# Copyright CEA/DAM/DIF (2007, 2008, 2009, 2010, 2011, 2012)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -29,8 +29,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: Event.py 447 2011-02-05 17:28:22Z st-cea $
 
 """
 Event handler support
@@ -91,5 +89,11 @@ class EventHandler(object):
         Handle firing timer.
 
         @param timer: The timer that is firing. 
+        """
+
+    def _ev_routing(self, worker, arg):
+        """
+        Routing event (private). Called to indicate that a (meta)worker has just
+        updated one of its route path. You can safely ignore this event.
         """
 

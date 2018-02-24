@@ -1,6 +1,5 @@
 
 " Vim syntax file for ClusterShell groups.conf
-" Version Info: $Id: groupsconf.vim 272 2010-06-08 15:37:06Z st-cea $
 
 " For version 5.x: Clear all syntax items
 " For version 6.x: Quit when a syntax file was already loaded
@@ -17,6 +16,7 @@ syn case ignore
 syn match groupsDefaultValue "\(:\|=\)\s*\w\+$"ms=s+1 contained
 syn match groupsColonValue "\(:\|=\).*" contained contains=groupsDefaultValue
 syn match groupsDefaultKey "^default\(:\|=\).*$" contains=groupsColonValue
+syn match groupsGroupsDirKey "^groupsdir\(:\|=\)"
 
 " Sources
 syn match groupsVars "\(\$GROUP\|\$NODE\)" contained
@@ -44,6 +44,7 @@ if version >= 508 || !exists("did_groupsconf_syntax_inits")
   HiLink groupsComment		Comment
   HiLink groupsMainHeader	Constant
   HiLink groupsDefaultKey	Identifier
+  HiLink groupsGroupsDirKey	Identifier
   HiLink groupsDefaultValue	Special
   HiLink groupsKeys		Identifier
   HiLink groupsVars		Keyword

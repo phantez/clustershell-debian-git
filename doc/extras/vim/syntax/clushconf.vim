@@ -1,6 +1,5 @@
 
 " Vim syntax file for clush.conf
-" Version Info: $Id: clushconf.vim 462 2011-02-08 20:55:28Z st-cea $
 
 " For version 5.x: Clear all syntax items
 " For version 6.x: Quit when a syntax file was already loaded

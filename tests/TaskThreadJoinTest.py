@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # ClusterShell test suite
 # Written by S. Thiell 2010-01-16
-# $Id: TaskThreadJoinTest.py 296 2010-07-21 19:56:34Z st-cea $
 
 
 """Unit test for ClusterShell task's join feature in multithreaded

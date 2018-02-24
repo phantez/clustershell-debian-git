@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # ClusterShell test suite
 # Written by S. Thiell 2010-01-16
-# $Id: TaskThreadSuspendTest.py 197 2010-02-02 16:48:12Z st-cea $
 
 
 """Unit test for ClusterShell in multithreaded environments"""

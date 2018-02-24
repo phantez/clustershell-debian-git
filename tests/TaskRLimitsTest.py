@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # ClusterShell task resource consumption/limits test suite
 # Written by S. Thiell 2010-10-19
-# $Id$
 
 
 """Unit test for ClusterShell Task (resource limits)"""
 
 import resource
+import subprocess
 import sys
 import unittest
 
@@ -20,6 +20,7 @@ class TaskRLimitsTest(unittest.TestCase):
 
     def setUp(self):
         """set soft nofile resource limit to 100"""
+        subprocess.call(["ls", "-x", "/proc/self/fd"], stdout=sys.stdout)
         self.soft, self.hard = resource.getrlimit(resource.RLIMIT_NOFILE)
         resource.setrlimit(resource.RLIMIT_NOFILE, (100, self.hard))
 
@@ -51,7 +52,7 @@ class TaskRLimitsTest(unittest.TestCase):
         task.set_info("fanout", 10)
         for i in xrange(400):
             worker = task.shell("/bin/hostname", nodes="localhost",
-                                stderr=False)
+                                stderr=stderr)
             self.assert_(worker != None)
         # run task
         task.resume()

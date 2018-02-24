@@ -29,8 +29,6 @@
 #
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
-#
-# $Id: Poll.py 500 2011-05-29 16:18:05Z st-cea $
 
 """
 A poll() based ClusterShell Engine.
@@ -170,7 +168,7 @@ class EnginePoll(Engine):
                             client._handle_read()
                         else:
                             client._handle_error()
-                    except EngineClientEOF, e:
+                    except EngineClientEOF:
                         self._debug("EngineClientEOF %s" % client)
                         if fdev & Engine.E_READ:
                             self.remove(client)

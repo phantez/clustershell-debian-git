@@ -1,33 +1,28 @@
 #!/usr/bin/env python
 # ClusterShell.Node* test suite
 # Written by S. Thiell 2010-03-18
-# $Id: NodeSetGroupTest.py 458 2011-02-07 21:55:17Z st-cea $
 
 
 """Unit test for NodeSet with Group support"""
 
 import copy
+import shutil
 import sys
-import tempfile
 import unittest
 
 sys.path.insert(0, '../lib')
+
+from TLib import *
 
 # Wildcard import for testing purpose
 import ClusterShell.NodeSet
 from ClusterShell.NodeSet import *
 from ClusterShell.NodeUtils import *
 
-def makeTestFile(text):
-    """Create a temporary file with the provided text."""
-    f = tempfile.NamedTemporaryFile()
-    f.write(text)
-    f.flush()
-    return f
 
 def makeTestG1():
     """Create a temporary group file 1"""
-    f1 = makeTestFile("""
+    f1 = make_temp_file("""
 #
 oss: montana5,montana4
 mds: montana6
@@ -59,7 +54,7 @@ all: montana[1-6,32-163]
 
 def makeTestG2():
     """Create a temporary group file 2"""
-    f2 = makeTestFile("""
+    f2 = make_temp_file("""
 #
 #
 para: montana[32-37,42-55]
@@ -69,7 +64,7 @@ gpu: montana[38-41]
 
 def makeTestG3():
     """Create a temporary group file 3"""
-    f3 = makeTestFile("""
+    f3 = make_temp_file("""
 #
 #
 all: montana[32-55]
@@ -86,7 +81,7 @@ single: idaho
 
 def makeTestR3():
     """Create a temporary reverse group file 3"""
-    r3 = makeTestFile("""
+    r3 = make_temp_file("""
 #
 #
 montana32: all,para,login,chassis1
@@ -125,9 +120,9 @@ class NodeSetGroupTest(unittest.TestCase):
         test_groups1 = makeTestG1()
 
         source = GroupSource("simple",
-                             "awk -F: '/^$GROUP:/ {print $2}' %s" % test_groups1.name,
-                             "awk -F: '/^all:/ {print $2}' %s" % test_groups1.name,
-                             "awk -F: '/^[[:alnum:]_]/ {print $1}' %s" % test_groups1.name,
+                             "sed -n 's/^$GROUP:\(.*\)/\\1/p' %s" % test_groups1.name,
+                             "sed -n 's/^all:\(.*\)/\\1/p' %s" % test_groups1.name,
+                             "sed -n 's/^\([0-9A-Za-z_-]*\):.*/\\1/p' %s" % test_groups1.name,
                              None)
 
         # create custom resolver with default source
@@ -169,17 +164,22 @@ class NodeSetGroupTest(unittest.TestCase):
     def testAllNoResolver(self):
         """test NodeSet.fromall() with no resolver"""
         self.assertRaises(NodeSetExternalError, NodeSet.fromall,
-                          resolver=NOGROUP_RESOLVER)
+                          resolver=RESOLVER_NOGROUP)
             
+    def testGroupsNoResolver(self):
+        """test NodeSet.groups() with no resolver"""
+        nodeset = NodeSet("foo", resolver=RESOLVER_NOGROUP)
+        self.assertRaises(NodeSetExternalError, nodeset.groups)
+
     def testGroupResolverAddSourceError(self):
         """test GroupResolver.add_source() error"""
 
         test_groups1 = makeTestG1()
 
         source = GroupSource("simple",
-                             "awk -F: '/^$GROUP:/ {print $2}' %s" % test_groups1.name,
-                             "awk -F: '/^all:/ {print $2}' %s" % test_groups1.name,
-                             "awk -F: '/^[[:alnum:]_]/ {print $1}' %s" % test_groups1.name,
+                             "sed -n 's/^$GROUP:\(.*\)/\\1/p' %s" % test_groups1.name,
+                             "sed -n 's/^all:\(.*\)/\\1/p' %s" % test_groups1.name,
+                             "sed -n 's/^\([0-9A-Za-z_-]*\):.*/\\1/p' %s" % test_groups1.name,
                              None)
 
         res = GroupResolver(source)
@@ -192,7 +192,7 @@ class NodeSetGroupTest(unittest.TestCase):
         test_groups1 = makeTestG1()
 
         source = GroupSource("minimal",
-                             "awk -F: '/^$GROUP:/ {print $2}' %s" % test_groups1.name,
+                             "sed -n 's/^$GROUP:\(.*\)/\\1/p' %s" % test_groups1.name,
                              None, None, None)
 
         # create custom resolver with default source
@@ -207,7 +207,7 @@ class NodeSetGroupTest(unittest.TestCase):
     
     def testConfigEmpty(self):
         """test groups with an empty configuration file"""
-        f = makeTestFile("")
+        f = make_temp_file("")
         res = GroupResolverConfig(f.name)
         nodeset = NodeSet("example[1-100]", resolver=res)
         self.assertEqual(str(nodeset), "example[1-100]")
@@ -217,7 +217,7 @@ class NodeSetGroupTest(unittest.TestCase):
 
     def testConfigBasicLocal(self):
         """test groups with a basic local config file"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [Main]
@@ -233,6 +233,7 @@ list: echo foo
         nodeset = NodeSet("example[1-100]", resolver=res)
         self.assertEqual(str(nodeset), "example[1-100]")
         self.assertEqual(nodeset.regroup(), "@foo")
+        self.assertEqual(nodeset.groups().keys(), ["@foo"])
         self.assertEqual(str(NodeSet("@foo", resolver=res)), "example[1-100]")
 
         # No 'all' defined: all_nodes() should raise an error
@@ -254,7 +255,7 @@ list: echo foo
 
     def testConfigWrongSyntax(self):
         """test wrong groups config syntax"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [Main]
@@ -267,7 +268,7 @@ something: echo example[1-100]
 
     def testConfigBasicLocalVerbose(self):
         """test groups with a basic local config file (verbose)"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [Main]
@@ -288,7 +289,7 @@ list: echo foo
 
     def testConfigBasicLocalAlternative(self):
         """test groups with a basic local config file (= alternative)"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [Main]
@@ -309,7 +310,7 @@ list=echo foo
 
     def testConfigBasicEmptyDefault(self):
         """test groups with a empty default namespace"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [Main]
@@ -329,7 +330,7 @@ list: echo foo
 
     def testConfigBasicNoMain(self):
         """test groups with a local config without main section"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [local]
@@ -346,7 +347,7 @@ list: echo foo
 
     def testConfigBasicWrongDefault(self):
         """test groups with a wrong default namespace"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [Main]
@@ -362,7 +363,7 @@ list: echo foo
 
     def testConfigQueryFailed(self):
         """test groups with config and failed query"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [Main]
@@ -381,7 +382,7 @@ list: echo foo
 
     def testConfigRegroupWrongNamespace(self):
         """test groups by calling regroup(wrong_namespace)"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [Main]
@@ -399,7 +400,7 @@ list: echo foo
 
     def testConfigNoListButReverseQuery(self):
         """test groups with no list but reverse upcall"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [Main]
@@ -418,7 +419,7 @@ reverse: echo foo
 
     def testConfigWithEmptyList(self):
         """test groups with list upcall returning nothing"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [Main]
@@ -437,7 +438,7 @@ reverse: echo foo
 
     def testConfigResolverSources(self):
         """test sources() with groups config of 2 sources"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [Main]
@@ -456,28 +457,126 @@ map: echo example[1-10]
 
     def testConfigCrossRefs(self):
         """test groups config with cross references"""
-        f = makeTestFile("""
+        f = make_temp_file("""
 # A comment
 
 [Main]
-default: local
+default: other
 
 [local]
 map: echo example[1-100]
 
 [other]
-map: echo @local:foo
-        """)
+map: echo "foo: @local:foo" | sed -n 's/^$GROUP:\(.*\)/\\1/p'
+""")
         res = GroupResolverConfig(f.name)
         nodeset = NodeSet("@other:foo", resolver=res)
         self.assertEqual(str(nodeset), "example[1-100]")
 
+    def testConfigGroupsDirDummy(self):
+        """test groups with groupsdir defined (dummy)"""
+        f = make_temp_file("""
+
+[Main]
+default: local
+groupsdir: /path/to/nowhere
+
+[local]
+map: echo example[1-100]
+#all:
+list: echo foo
+#reverse:
+        """)
+        res = GroupResolverConfig(f.name)
+        nodeset = NodeSet("example[1-100]", resolver=res)
+        self.assertEqual(str(nodeset), "example[1-100]")
+        self.assertEqual(nodeset.regroup(), "@foo")
+        self.assertEqual(str(NodeSet("@foo", resolver=res)), "example[1-100]")
+
+    def testConfigGroupsDirExists(self):
+        """test groups with groupsdir defined (real, other)"""
+        dname = make_temp_dir()
+        f = make_temp_file("""
+
+[Main]
+default: new_local
+groupsdir: %s
+
+[local]
+map: echo example[1-100]
+#all:
+list: echo foo
+#reverse:
+        """ % dname)
+        f2 = make_temp_file("""
+[new_local]
+map: echo example[1-100]
+#all:
+list: echo bar
+#reverse:
+        """, suffix=".conf", dir=dname)
+        try:
+            res = GroupResolverConfig(f.name)
+            nodeset = NodeSet("example[1-100]", resolver=res)
+            self.assertEqual(str(nodeset), "example[1-100]")
+            self.assertEqual(nodeset.regroup(), "@bar")
+            self.assertEqual(str(NodeSet("@bar", resolver=res)), "example[1-100]")
+        finally:
+            f2.close()
+            f.close()
+            shutil.rmtree(dname, ignore_errors=True)
+
+    def testConfigGroupsDirExistsNoOther(self):
+        """test groups with groupsdir defined (real, no other)"""
+        dname1 = make_temp_dir()
+        dname2 = make_temp_dir()
+        f = make_temp_file("""
+
+[Main]
+default: new_local
+groupsdir: %s %s
+        """ % (dname1, dname2))
+        f2 = make_temp_file("""
+[new_local]
+map: echo example[1-100]
+#all:
+list: echo bar
+#reverse:
+        """, suffix=".conf", dir=dname2)
+        try:
+            res = GroupResolverConfig(f.name)
+            nodeset = NodeSet("example[1-100]", resolver=res)
+            self.assertEqual(str(nodeset), "example[1-100]")
+            self.assertEqual(nodeset.regroup(), "@bar")
+            self.assertEqual(str(NodeSet("@bar", resolver=res)), "example[1-100]")
+        finally:
+            f2.close()
+            f.close()
+            shutil.rmtree(dname1, ignore_errors=True)
+            shutil.rmtree(dname2, ignore_errors=True)
+
+    def testConfigGroupsDirNotADirectory(self):
+        """test groups with groupsdir defined (not a directory)"""
+        dname = make_temp_dir()
+        fdummy = make_temp_file("wrong")
+        f = make_temp_file("""
+
+[Main]
+default: new_local
+groupsdir: %s
+        """ % fdummy.name)
+        try:
+            self.assertRaises(GroupResolverConfigError, GroupResolverConfig, f.name)
+        finally:
+            fdummy.close()
+            f.close()
+            shutil.rmtree(dname, ignore_errors=True)
 
 
 class NodeSetGroup2GSTest(unittest.TestCase):
 
     def setUp(self):
-        """configure simple STD_GROUP_RESOLVER"""
+        """configure simple RESOLVER_STD_GROUP"""
 
         # create temporary groups file and keep a reference to avoid file closing
         self.test_groups1 = makeTestG1()
@@ -485,23 +584,23 @@ class NodeSetGroup2GSTest(unittest.TestCase):
 
         # create 2 GroupSource objects
         default = GroupSource("default",
-                              "awk -F: '/^$GROUP:/ {print $2}' %s" % self.test_groups1.name,
-                              "awk -F: '/^all:/ {print $2}' %s" % self.test_groups1.name,
-                              "awk -F: '/^[[:alnum:]_]/ {print $1}' %s" % self.test_groups1.name,
+                              "sed -n 's/^$GROUP:\(.*\)/\\1/p' %s" % self.test_groups1.name,
+                              "sed -n 's/^all:\(.*\)/\\1/p' %s" % self.test_groups1.name,
+                              "sed -n 's/^\([0-9A-Za-z_-]*\):.*/\\1/p' %s" % self.test_groups1.name,
                               None)
 
         source2 = GroupSource("source2",
-                              "awk -F: '/^$GROUP:/ {print $2}' %s" % self.test_groups2.name,
-                              "awk -F: '/^all:/ {print $2}' %s" % self.test_groups2.name,
-                              "awk -F: '/^[[:alnum:]_]/ {print $1}' %s" % self.test_groups2.name,
+                              "sed -n 's/^$GROUP:\(.*\)/\\1/p' %s" % self.test_groups2.name,
+                              "sed -n 's/^all:\(.*\)/\\1/p' %s" % self.test_groups2.name,
+                              "sed -n 's/^\([0-9A-Za-z_-]*\):.*/\\1/p' %s" % self.test_groups2.name,
                               None)
 
-        ClusterShell.NodeSet.STD_GROUP_RESOLVER = GroupResolver(default)
-        ClusterShell.NodeSet.STD_GROUP_RESOLVER.add_source(source2)
+        ClusterShell.NodeSet.RESOLVER_STD_GROUP = GroupResolver(default)
+        ClusterShell.NodeSet.RESOLVER_STD_GROUP.add_source(source2)
 
     def tearDown(self):
-        """restore default STD_GROUP_RESOLVER"""
-        ClusterShell.NodeSet.STD_GROUP_RESOLVER = ClusterShell.NodeSet.DEF_STD_GROUP_RESOLVER
+        """restore default RESOLVER_STD_GROUP"""
+        ClusterShell.NodeSet.RESOLVER_STD_GROUP = ClusterShell.NodeSet.DEF_RESOLVER_STD_GROUP
         del self.test_groups1
         del self.test_groups2
 
@@ -520,7 +619,7 @@ class NodeSetGroup2GSTest(unittest.TestCase):
 
     def testGroupListDefault(self):
         """test NodeSet group listing GroupResolver.grouplist()"""
-        groups = ClusterShell.NodeSet.STD_GROUP_RESOLVER.grouplist()
+        groups = ClusterShell.NodeSet.RESOLVER_STD_GROUP.grouplist()
         self.assertEqual(len(groups), 20)
         helper_groups = grouplist()
         self.assertEqual(len(helper_groups), 20)
@@ -538,7 +637,7 @@ class NodeSetGroup2GSTest(unittest.TestCase):
 
     def testGroupListSource2(self):
         """test NodeSet group listing GroupResolver.grouplist(source)"""
-        groups = ClusterShell.NodeSet.STD_GROUP_RESOLVER.grouplist("source2")
+        groups = ClusterShell.NodeSet.RESOLVER_STD_GROUP.grouplist("source2")
         self.assertEqual(len(groups), 2)
         total = 0
         for group in groups:
@@ -551,6 +650,16 @@ class NodeSetGroup2GSTest(unittest.TestCase):
         self.assertEqual(nodeset.regroup("source2"), "@source2:para")
         self.assertEqual(nodeset.regroup("source2", noprefix=True), "@para")
 
+    def testGroupGroups(self):
+        """test NodeSet.groups()"""
+        nodeset = NodeSet("montana[32-37,42-55]")
+        self.assertEqual(sorted(nodeset.groups().keys()), ['@all', '@chassis1', '@chassis10', '@chassis11', '@chassis12', '@chassis2', '@chassis3', '@chassis6', '@chassis7', '@chassis8', '@chassis9', '@compute'])
+        testns = NodeSet()
+        for gnodes, inodes in nodeset.groups().itervalues():
+            testns.update(inodes)
+        self.assertEqual(testns, nodeset)
+
+
 class NodeSetRegroupTest(unittest.TestCase):
 
     def testGroupResolverReverse(self):
@@ -560,9 +669,9 @@ class NodeSetRegroupTest(unittest.TestCase):
         test_reverse3 = makeTestR3()
 
         source = GroupSource("test",
-                             "awk -F: '/^$GROUP:/ {print $2}' %s" % test_groups3.name,
-                             "awk -F: '/^all:/ {print $2}' %s" % test_groups3.name,
-                             "awk -F: '/^[[:alnum:]_]/ { print $1 }' %s" % test_groups3.name,
+                             "sed -n 's/^$GROUP:\(.*\)/\\1/p' %s" % test_groups3.name,
+                             "sed -n 's/^all:\(.*\)/\\1/p' %s" % test_groups3.name,
+                             "sed -n 's/^\([0-9A-Za-z_-]*\):.*/\\1/p' %s" % test_groups3.name,
                              "awk -F: '/^$NODE:/ { gsub(\",\",\"\\n\",$2); print $2 }' %s" % test_reverse3.name)
 
         # create custom resolver with default source
