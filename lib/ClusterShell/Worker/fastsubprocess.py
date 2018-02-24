@@ -29,11 +29,17 @@ descriptors
 Faster revision of subprocess-like module.
 """
 
-import sys
-import os
-import types
 import gc
+import os
 import signal
+import sys
+import types
+
+# Python 3 compatibility
+try:
+    basestring
+except NameError:
+    basestring = str
 
 # Exception classes used by this module.
 class CalledProcessError(Exception):
@@ -63,7 +69,7 @@ _active = []
 
 def _cleanup():
     for inst in _active[:]:
-        if inst._internal_poll(_deadstate=sys.maxint) >= 0:
+        if inst._internal_poll(_deadstate=sys.maxsize) >= 0:
             try:
                 _active.remove(inst)
             except ValueError:
@@ -121,7 +127,7 @@ class Popen(object):
         _cleanup()
 
         self._child_created = False
-        if not isinstance(bufsize, (int, long)):
+        if not isinstance(bufsize, int):
             raise TypeError("bufsize must be an integer")
 
         self.pid = None
@@ -175,7 +181,7 @@ class Popen(object):
             # We didn't get to successfully create a child process.
             return
         # In case the child hasn't been waited on, check if it's done.
-        self._internal_poll(_deadstate=sys.maxint)
+        self._internal_poll(_deadstate=sys.maxsize)
         if self.returncode is None and _active is not None:
             # Child is still running, keep us alive until we can wait on it.
             _active.append(self)
@@ -236,7 +242,14 @@ class Popen(object):
         if stdout is None:
             pass
         elif stdout == PIPE:
-            c2pread, c2pwrite = os.pipe()
+            try:
+                c2pread, c2pwrite = os.pipe()
+            except:
+                # Cleanup of previous pipe() descriptors
+                if stdin == PIPE:
+                    os.close(p2cread)
+                    os.close(p2cwrite)
+                raise
         elif isinstance(stdout, int):
             c2pwrite = stdout
         else:
@@ -246,7 +259,17 @@ class Popen(object):
         if stderr is None:
             pass
         elif stderr == PIPE:
-            errread, errwrite = os.pipe()
+            try:
+                errread, errwrite = os.pipe()
+            except:
+                # Cleanup of previous pipe() descriptors
+                if stdin == PIPE:
+                    os.close(p2cread)
+                    os.close(p2cwrite)
+                if stdout == PIPE:
+                    os.close(c2pread)
+                    os.close(c2pwrite)
+                raise
         elif stderr == STDOUT:
             errwrite = c2pwrite
         elif isinstance(stderr, int):
@@ -267,7 +290,7 @@ class Popen(object):
                        errread, errwrite):
         """Execute program (POSIX version)"""
 
-        if isinstance(args, types.StringTypes):
+        if isinstance(args, basestring):
             args = [args]
         else:
             args = list(args)
@@ -402,7 +425,7 @@ class Popen(object):
         while read_set or write_set:
             try:
                 rlist, wlist, xlist = select.select(read_set, write_set, [])
-            except select.error, ex:
+            except select.error as ex:
                 if ex.args[0] == errno.EINTR:
                     continue
                 raise
