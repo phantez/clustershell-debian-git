@@ -30,7 +30,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Popen.py 385 2010-10-19 21:36:48Z st-cea $
+# $Id: Popen.py 421 2010-12-06 22:04:27Z st-cea $
 
 """
 WorkerPopen
@@ -51,7 +51,7 @@ Usage example:
 import os
 import signal
 
-from ClusterShell.Worker.Worker import WorkerSimple, WorkerBadArgumentError
+from ClusterShell.Worker.Worker import WorkerSimple
 
 
 class WorkerPopen(WorkerSimple):
@@ -69,7 +69,8 @@ class WorkerPopen(WorkerSimple):
 
         self.command = command
         if not self.command:
-            raise WorkerBadArgumentError()
+            raise ValueError("missing command parameter in WorkerPopen " \
+			     "constructor")
 
         self.popen = None
         self.rc = None
@@ -92,34 +93,31 @@ class WorkerPopen(WorkerSimple):
 
         return self
 
-    def _close(self, force, timeout):
+    def _close(self, abort, flush, timeout):
         """
-        Close worker. Called by engine after worker has been
-        unregistered. This method should handle all termination types
-        (normal, forced or on timeout).
+        Close client. See EngineClient._close().
         """
-        if not force and self._rbuf:
+        if flush and self._rbuf:
             # We still have some read data available in buffer, but no
             # EOL. Generate a final message before closing.
             self.worker._on_msgline(self._rbuf)
 
         rc = -1
-        if force or timeout:
+        if abort:
             # check if process has terminated
             prc = self.popen.poll()
             if prc is None:
                 # process is still running, kill it
                 os.kill(self.popen.pid, signal.SIGKILL)
-        else:
-            # close process / check if it has terminated
-            prc = self.popen.wait()
-            # get exit status
-            if prc >= 0:
-                # process exited normally
-                rc = prc
-            else:
-                # if process was signaled, return 128 + signum (bash-like)
-                rc = 128 + -prc
+        # release process
+        prc = self.popen.wait()
+        # get exit status
+        if prc >= 0:
+            # process exited normally
+            rc = prc
+        elif not abort:
+            # if process was signaled, return 128 + signum (bash-like)
+            rc = 128 + -prc
 
         self.popen.stdin.close()
         self.popen.stdout.close()
@@ -129,6 +127,7 @@ class WorkerPopen(WorkerSimple):
         if rc >= 0:
             self._on_rc(rc)
         elif timeout:
+            assert abort, "abort flag not set on timeout"
             self._on_timeout()
 
         self._invoke("ev_close")
