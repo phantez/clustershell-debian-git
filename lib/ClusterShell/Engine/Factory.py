@@ -1,5 +1,5 @@
 #
-# Copyright CEA/DAM/DIF (2009, 2010)
+# Copyright CEA/DAM/DIF (2009, 2010, 2011)
 #  Contributor: Stephane THIELL <stephane.thiell@cea.fr>
 #
 # This file is part of the ClusterShell library.
@@ -30,7 +30,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Factory.py 384 2010-10-17 21:24:21Z st-cea $
+# $Id: Factory.py 460 2011-02-07 23:22:45Z st-cea $
 
 """
 Engine Factory to select the best working event engine for the current
@@ -44,7 +44,7 @@ from ClusterShell.Engine.Engine import EngineNotSupportedError
 # Available event engines
 from ClusterShell.Engine.EPoll import EngineEPoll
 from ClusterShell.Engine.Poll import EnginePoll
-
+from ClusterShell.Engine.Select import EngineSelect
 
 class PreferredEngine(object):
     """
@@ -52,7 +52,8 @@ class PreferredEngine(object):
     """
 
     engines = { EngineEPoll.identifier: EngineEPoll,
-                EnginePoll.identifier: EnginePoll }
+                EnginePoll.identifier: EnginePoll,
+                EngineSelect.identifier: EngineSelect }
 
     def __new__(cls, hint, info):
         """
@@ -60,15 +61,16 @@ class PreferredEngine(object):
         """
         if not hint or hint == 'auto':
             # in order or preference
-            for engine_class in [ EngineEPoll, EnginePoll ]:
+            for engine_class in [ EngineEPoll, EnginePoll, EngineSelect ]:
                 try:
                     return engine_class(info)
                 except EngineNotSupportedError:
                     pass
-            raise RuntimeError("FATAL: No supported Engine found")
+            raise RuntimeError("FATAL: No supported ClusterShell.Engine found")
         else:
             # User overriding engine selection
             try:
+                # constructor may raise EngineNotSupportedError
                 return cls.engines[hint](info)
             except KeyError, exc:
                 print >> sys.stderr, "Invalid engine identifier", exc

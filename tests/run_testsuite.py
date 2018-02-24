@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell test suite
 # Written by S. Thiell
-# $Id: run_testsuite.py 417 2010-11-30 21:19:41Z st-cea $
+# $Id: run_testsuite.py 490 2011-03-19 16:09:05Z st-cea $
 
 """
 run_testsuite.py [-hv]
@@ -60,6 +60,7 @@ if __name__ == '__main__':
                                         "CLIConfig",
                                         "CLIDisplay",
                                         "CLIOptionParser",
+                                        "ClushScriptTest"
                                         ])
 
     unittest.TextTestRunner(verbosity=verb).run(suite)

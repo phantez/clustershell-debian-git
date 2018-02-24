@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell (local) test suite
 # Written by S. Thiell 2008-04-09
-# $Id: TaskLocalTest.py 384 2010-10-17 21:24:21Z st-cea $
+# $Id: TaskLocalTest.py 455 2011-02-06 21:50:27Z st-cea $
 
 
 """Unit test for ClusterShell Task (local)"""
@@ -209,7 +209,7 @@ class TaskLocalTest(unittest.TestCase):
         """test task local empty buffer"""
         task = task_self()
         self.assert_(task != None)
-        task.shell("/bin/true", key="empty")
+        task.shell("true", key="empty")
         task.resume()
         self.assertEqual(task.key_buffer("empty"), '')
         for buf, keys in task.iter_buffers():
@@ -219,7 +219,7 @@ class TaskLocalTest(unittest.TestCase):
         """test task local empty error buffer"""
         task = task_self()
         self.assert_(task != None)
-        task.shell("/bin/true", key="empty")
+        task.shell("true", key="empty")
         task.resume()
         self.assertEqual(task.key_error("empty"), '')
         for buf, keys in task.iter_errors():
@@ -229,7 +229,7 @@ class TaskLocalTest(unittest.TestCase):
         """test some task methods raising KeyError"""
         task = task_self()
         self.assert_(task != None)
-        task.shell("/bin/true", key="dummy")
+        task.shell("true", key="dummy")
         task.resume()
         # task.key_retcode raises KeyError
         self.assertRaises(KeyError, task.key_retcode, "not_known")
@@ -315,8 +315,8 @@ class TaskLocalTest(unittest.TestCase):
         # 4 ['worker4']
         # 5 ['worker5bis', 'worker5']
 
-        task.shell("/bin/true", key="worker0")
-        task.shell("/bin/false", key="worker1")
+        task.shell("true", key="worker0")
+        task.shell("false", key="worker1")
         task.shell("/bin/sh -c 'exit 1'", key="worker1bis")
         task.shell("/bin/sh -c 'exit 2'", key="worker2")
         task.shell("/bin/sh -c 'exit 3'", key="worker3")
@@ -369,20 +369,20 @@ class TaskLocalTest(unittest.TestCase):
         default_print_debug = task.info("print_debug")
         try:
             task.set_info("print_debug", _test_print_debug)
-            task.shell("/bin/true")
+            task.shell("true")
             task.resume()
             self.assertEqual(task.info("user_print_debug_last"), None)
 
             # with debug enabled, it should work
             task.set_info("debug", True)
-            task.shell("/bin/true")
+            task.shell("true")
             task.resume()
-            self.assertEqual(task.info("user_print_debug_last"), "POPEN: /bin/true")
+            self.assertEqual(task.info("user_print_debug_last"), "POPEN: true")
 
             # remove debug
             task.set_info("debug", False)
             # re-run for default print debug callback code coverage
-            task.shell("/bin/true")
+            task.shell("true")
             task.resume()
         finally:
             # restore default print_debug
