@@ -31,9 +31,9 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: setup.py 304 2010-07-27 19:47:09Z st-cea $
+# $Id: setup.py 390 2010-10-20 21:07:44Z st-cea $
 
-from distutils.core import setup
+from setuptools import setup, find_packages
 import os
 
 if not os.access('scripts/clubak', os.F_OK):
@@ -44,16 +44,14 @@ if not os.access('scripts/nodeset', os.F_OK):
     os.symlink('nodeset.py', 'scripts/nodeset')
 
 setup(name='ClusterShell',
-      version='1.3',
+      version='1.3.3',
       license='CeCILL-C (French equivalent to LGPLv2+)',
       description='ClusterShell library',
       author='Stephane Thiell',
       author_email='stephane.thiell@cea.fr',
       url='http://clustershell.sourceforge.net/',
       package_dir={'': 'lib'},
-      packages=['ClusterShell',
-               'ClusterShell.Engine',
-               'ClusterShell.Worker'],
+      packages=find_packages('lib'),
       scripts=['scripts/clubak',
                'scripts/clush',
                'scripts/nodeset']

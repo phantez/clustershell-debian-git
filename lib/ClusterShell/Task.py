@@ -30,7 +30,7 @@
 # The fact that you are presently reading this means that you have had
 # knowledge of the CeCILL-C license and that you accept its terms.
 #
-# $Id: Task.py 295 2010-07-21 19:55:15Z st-cea $
+# $Id: Task.py 389 2010-10-20 20:33:38Z st-cea $
 
 """
 ClusterShell Task module.
@@ -431,6 +431,12 @@ class Task(object):
         pairs can be passed to the engine and/or workers.
         Users may store their own task-specific info key, value pairs
         using this method and retrieve them with info().
+        
+        The following example changes the fanout value to 128:
+        >>> task.set_info('fanout', 128)
+
+        The following example enables debug messages:
+        >>> task.set_info('debug', True)
 
         Task info_keys are:
           - "debug": Boolean value indicating whether to enable library
@@ -460,7 +466,28 @@ class Task(object):
 
     def shell(self, command, **kwargs):
         """
-        Schedule a shell command for local or distant execution.
+        Schedule a shell command for local or distant parallel
+        execution. This key method in the ClusterShell library creates
+        a local or remote Worker (depending on the presence of the
+        nodes parameter) and immediately schedule it for execution in
+        task runloop. So, if the task is already running (ie. called
+        from an event handler), the command is started immediately,
+        assuming the fanout constraint is met. If the task is not
+        running, the command is not started but scheduled for late
+        execution. See resume() to start task runloop.
+
+        The following optional parameters are passed to the underlying
+        local or remote Worker constructor:
+          - handler: EventHandler instance to notify (on event) --
+            default is no handler (None)
+          - timeout: command timeout delay expressed in second using
+            a floating point value -- default is unlimited (None)
+          - autoclose: if set to True, the underlying Worker is
+            automatically aborted as soon as all other non-autoclosing
+            task objects (workers, ports, timers) have finished --
+            default is False
+          - stderr: separate stdout/stderr if set to True -- default
+            is False.
 
         Local usage::
             task.shell(command [, key=key] [, handler=handler]
@@ -471,6 +498,11 @@ class Task(object):
             task.shell(command, nodes=nodeset [, handler=handler]
                   [, timeout=secs], [, autoclose=enable_autoclose]
                   [, strderr=enable_stderr])
+
+        Example:
+        >>> task = task_self()
+        >>> task.shell("/bin/date", nodes="node[1-2345]")
+        >>> task.resume()
         """
 
         handler = kwargs.get("handler", None)
@@ -548,23 +580,61 @@ class Task(object):
         self._add_port(port)
         return port
 
-    @tasksyncmethod()
     def timer(self, fire, handler, interval=-1.0, autoclose=False):
         """
-        Create task's timer.
+        Create a timer bound to this task that fires at a preset time
+        in the future by invoking the ev_timer() method of `handler'
+        (provided EventHandler object). Timers can fire either only
+        once or repeatedly at fixed time intervals. Repeating timers
+        can also have their next firing time manually adjusted.
+
+        The mandatory parameter `fire' sets the firing delay in seconds.
+        
+        The optional parameter `interval' sets the firing interval of
+        the timer. If not specified, the timer fires once and then is
+        automatically invalidated.
+
+        Time values are expressed in second using floating point
+        values. Precision is implementation (and system) dependent.
+
+        The optional parameter `autoclose', if set to True, creates
+        an "autoclosing" timer: it will be automatically invalidated
+        as soon as all other non-autoclosing task's objects (workers,
+        ports, timers) have finished. Default value is False, which
+        means the timer will retain task's runloop until it is
+        invalidated.
+
+        Return a new EngineTimer instance.
+
+        See ClusterShell.Engine.Engine.EngineTimer for more details.
         """
         assert fire >= 0.0, \
             "timer's relative fire time must be a positive floating number"
         
         timer = EngineTimer(fire, interval, autoclose, handler)
-        self._engine.add_timer(timer)
+        # The following method may be sent through msg port (async
+        # call) if called from another task.
+        self._add_timer(timer)
+        # always return new timer (sync)
         return timer
+
+    @tasksyncmethod()
+    def _add_timer(self, timer):
+        """Add a timer to task engine (thread-safe)."""
+        self._engine.add_timer(timer)
 
     @tasksyncmethod()
     def schedule(self, worker):
         """
-        Schedule a worker for execution. Only useful for manually
-        instantiated workers.
+        Schedule a worker for execution, ie. add worker in task running
+        loop. Worker will start processing immediately if the task is
+        running (eg. called from an event handler) or as soon as the
+        task is started otherwise. Only useful for manually instantiated
+        workers, for example:
+        >>> task = task_self()
+        >>> worker = WorkerSsh("node[2-3]", None, 10, command="/bin/ls")
+        >>> task.schedule(worker)
+        >>> task.resume()
         """
         assert self in Task._tasks.values(), "deleted task"
 

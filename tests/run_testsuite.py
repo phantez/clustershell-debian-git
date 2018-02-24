@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ClusterShell test suite
 # Written by S. Thiell
-# $Id: run_testsuite.py 246 2010-04-07 22:51:33Z st-cea $
+# $Id: run_testsuite.py 385 2010-10-19 21:36:48Z st-cea $
 
 """
 run_testsuite.py [-hv]
@@ -52,6 +52,7 @@ if __name__ == '__main__':
                                         "TaskDistantPdshTest",
                                         "TaskMsgTreeTest",
                                         "TaskPortTest",
+                                        "TaskRLimitsTest",
                                         "TaskTimeoutTest",
                                         "TaskTimerTest",
                                         "TaskThreadJoinTest",
