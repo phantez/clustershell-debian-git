@@ -12,7 +12,8 @@ from TLib import *
 from ClusterShell.CLI.Nodeset import main
 
 from ClusterShell.NodeUtils import GroupResolverConfig
-from ClusterShell.NodeSet import set_std_group_resolver
+from ClusterShell.NodeSet import set_std_group_resolver, \
+                                 set_std_group_resolver_config
 
 
 class CLINodesetTestBase(unittest.TestCase):
@@ -83,6 +84,9 @@ class CLINodesetTest(CLINodesetTestBase):
         self._nodeset_t(["--count", "foo[395-442]", "--intersection", "foo", "-i", "foo[1-200,245-394]"], None, b"0\n")
         self._nodeset_t(["--count", "foo[395-442]", "-i", "foo", "-i", "foo[0-200,245-394]"], None, b"0\n")
         self._nodeset_t(["--count", "foo[395-442]", "--intersection", "bar3,bar24", "-i", "foo[1-200,245-394]"], None, b"0\n")
+        # multiline args (#394)
+        self._nodeset_t(["--count", "foo[1,2]", "-i", "foo1\nfoo2"], None, b"2\n")
+        self._nodeset_t(["--count", "foo[1,2]", "-i", "foo1\nfoo2", "foo3\nfoo4"], None, b"4\n")
 
     def test_003_count_intersection_stdin(self):
         """test nodeset --count --intersection (stdin)"""
@@ -113,6 +117,9 @@ class CLINodesetTest(CLINodesetTestBase):
         self._nodeset_t(args + ["--fold", "foo[395-442]", "foo", "foo[1-200,245-394]"], None, b"foo,foo[1-200,245-442]\n")
         self._nodeset_t(args + ["--fold", "foo[395-442]", "foo", "foo[0-200,245-394]"], None, b"foo,foo[0-200,245-442]\n")
         self._nodeset_t(args + ["--fold", "foo[395-442]", "bar3,bar24", "foo[1-200,245-394]"], None, b"bar[3,24],foo[1-200,245-442]\n")
+        # multiline arg (#394)
+        self._nodeset_t(args + ["--fold", "foo3\nfoo1\nfoo2\nbar"], None, b"bar,foo[1-3]\n")
+        self._nodeset_t(args + ["--fold", "foo3\n\n\nfoo1\n\nfoo2\n\n"], None, b"foo[1-3]\n")
         # stdin
         self._nodeset_t(args + ["--fold"], "\n", b"\n")
         self._nodeset_t(args + ["--fold"], "foo\n", b"foo\n")
@@ -199,6 +206,7 @@ class CLINodesetTest(CLINodesetTestBase):
         self._nodeset_t(["--expand", "-S", ",", "foo[1-2],bar"], None, b"bar,foo1,foo2\n")
         self._nodeset_t(["--expand", "-S", "uuu", "foo[1-2],bar"], None, b"baruuufoo1uuufoo2\n")
         self._nodeset_t(["--expand", "-S", "\\n", "foo[1-2]"], None, b"foo1\nfoo2\n")
+        self._nodeset_t(["--expand", "-S", "\n", "foo[1-2]"], None, b"foo1\nfoo2\n")
 
     def test_009_fold_xor(self):
         """test nodeset --fold --xor"""
@@ -210,6 +218,9 @@ class CLINodesetTest(CLINodesetTestBase):
         self._nodeset_t(["--fold", "foo[395-442]", "-X", "foo", "-X", "foo[1-200,245-394]"], None, b"foo,foo[1-200,245-442]\n")
         self._nodeset_t(["--fold", "foo[395-442]", "-X", "foo", "-X", "foo[0-200,245-394]"], None, b"foo,foo[0-200,245-442]\n")
         self._nodeset_t(["--fold", "foo[395-442]", "-X", "bar3,bar24", "-X", "foo[1-200,245-394]"], None, b"bar[3,24],foo[1-200,245-442]\n")
+        # multiline args (#394)
+        self._nodeset_t(["--fold", "foo[1-10]", "-X", "foo5\nfoo6\nfoo7"], None, b"foo[1-4,8-10]\n")
+        self._nodeset_t(["--fold", "foo[1-10]", "-X", "foo5\nfoo6\nfoo7", "foo5\nfoo6"], None, b"foo[1-6,8-10]\n")
 
     def test_010_fold_xor_stdin(self):
         """test nodeset --fold --xor (stdin)"""
@@ -239,6 +250,9 @@ class CLINodesetTest(CLINodesetTestBase):
         # Do no change
         self._nodeset_t(["--fold", "foo[6-10]", "-x", "bar[0-5]"], None, b"foo[6-10]\n")
         self._nodeset_t(["--fold", "foo[0-10]", "foo[13-18]", "--exclude", "foo[5-10,15]"], None, b"foo[0-4,13-14,16-18]\n")
+        # multiline args (#394)
+        self._nodeset_t(["--fold", "foo[0-5]", "-x", "foo0\nfoo9\nfoo3\nfoo2\nfoo1"], None, b"foo[4-5]\n")
+        self._nodeset_t(["--fold", "foo[0-5]", "-x", "foo0\nfoo9\nfoo3\nfoo2\nfoo1", "foo5\nfoo6"], None, b"foo[4-6]\n")
 
     def test_012_fold_exclude_stdin(self):
         """test nodeset --fold --exclude (stdin)"""
@@ -823,3 +837,58 @@ class CLINodesetEmptyGroupsConf(CLINodesetTestBase):
     def test_empty_groups_conf(self):
         """test nodeset with empty groups.conf"""
         self._nodeset_t(["--list-all"], None, b"")
+
+
+class CLINodesetMalformedGroupsConf(CLINodesetTestBase):
+    """Unit test class for testing malformed groups.conf"""
+
+    def setUp(self):
+        self.gconff = make_temp_file(b"[Main")
+        set_std_group_resolver(GroupResolverConfig(self.gconff.name))
+
+    def tearDown(self):
+        set_std_group_resolver(None)
+        self.gconff = None
+
+    def test_malformed_groups_conf(self):
+        """test nodeset with malformed groups.conf"""
+        self._nodeset_t(["--list-all"], None, b"", 1, b"'[Main'\n")
+
+
+class CLINodesetGroupsConfOption(CLINodesetTestBase):
+    """Unit test class for testing --groupsconf option"""
+
+    def setUp(self):
+        self.gconff = make_temp_file(dedent("""
+            [Main]
+            default: global_default
+
+            [global_default]
+            map: echo example[1-100]
+            all: echo @foo,@bar,@moo
+            list: echo foo bar moo
+            """).encode())
+        set_std_group_resolver_config(self.gconff.name)
+
+        # passed to --groupsconf
+        self.custf = make_temp_file(dedent("""
+            [Main]
+            default: custom
+
+            [custom]
+            map: echo custom[7-42]
+            all: echo @selene,@artemis
+            list: echo selene artemis
+            """).encode())
+
+    def tearDown(self):
+        set_std_group_resolver(None)
+        self.gconff = None
+        self.custf = None
+
+    def test_groupsconf_option(self):
+        """test nodeset with --groupsconf"""
+        self._nodeset_t(["--list-all"], None, b"@bar\n@foo\n@moo\n")
+        self._nodeset_t(["-f", "@foo"], None, b"example[1-100]\n")
+        self._nodeset_t(["--groupsconf", self.custf.name, "--list-all"], None, b"@artemis\n@selene\n")
+        self._nodeset_t(["--groupsconf", self.custf.name, "-f", "@artemis"], None, b"custom[7-42]\n")

@@ -51,6 +51,10 @@ def _eh_sigspec_invoke_compat(method, argc_legacy, *args):
         # Assume new signature (2.x)
         return method(*args)
 
+def _eh_sigspec_ev_read_17(ev_read):
+    """Helper function to check whether ev_read has the old 1.7 signature."""
+    return len(getfullargspec(ev_read)[0]) == 2
+
 
 class WorkerException(Exception):
     """Generic worker exception."""
@@ -66,14 +70,14 @@ class Worker(object):
     """
     Worker is an essential base class for the ClusterShell library. The goal
     of a worker object is to execute a common work on a single or several
-    targets (abstract notion) in parallel. Concret targets and also the notion
-    of local or distant targets are managed by Worker's subclasses (for
-    example, see the DistantWorker base class).
+    targets (abstract notion) in parallel. Concrete targets and also the
+    notion of local or distant targets are managed by Worker's subclasses
+    (for example, see the DistantWorker base class).
 
     A configured Worker object is associated to a specific ClusterShell Task,
     which can be seen as a single-threaded Worker supervisor. Indeed, the work
     to be done is executed in parallel depending on other Workers and Task's
-    current paramaters, like current fanout value.
+    current parameters, like current fanout value.
 
     ClusterShell is designed to write event-driven applications, and the Worker
     class is key here as Worker objects are passed as parameter of most event
@@ -105,6 +109,10 @@ class Worker(object):
         # NOTE: the fanout value must be set before the Worker starts and
         # cannot currently be changed afterwards.
         self._fanout = FANOUT_DEFAULT
+
+        # Update task rc? [private]
+        # TODO: to be replaced with Task Event Handlers
+        self._update_task_rc = True
 
         # Parent task (once bound)
         self.task = None            #: worker's task when scheduled or None
@@ -151,10 +159,11 @@ class Worker(object):
 
     def _on_close(self, key, rc=None):
         """Called to generate events when the Worker is closing."""
-        # rc may be None here for example when called from StreamClient
-        # Only update task if rc is not None.
-        if rc is not None:
-            self.task._rc_set(self, key, rc)
+        if self._update_task_rc:
+            # rc may be None here for example when called from StreamClient
+            # Only update task if rc is not None.
+            if rc is not None:
+                self.task._rc_set(self, key, rc)
 
         self.current_node = key
         self.current_rc = rc
@@ -209,7 +218,10 @@ class Worker(object):
     # Base actions
 
     def abort(self):
-        """Abort processing any action by this worker."""
+        """Abort processing any action by this worker.
+
+        Safe to call on an already closing or aborting worker.
+        """
         raise NotImplementedError("Derived classes must implement.")
 
     def flush_buffers(self):
@@ -249,19 +261,18 @@ class DistantWorker(Worker):
         if sname == self.SNAME_STDERR:
             self.current_errmsg = msg
             if self.eh is not None:
-                # check for deprecated ev_error (< 1.8)
-                if hasattr(self.eh, 'ev_error'):
+                # call old ev_error for compat (default is no-op)
+                if hasattr(self.eh, 'ev_error'):  # missing in 1.8.0!
                     self.eh.ev_error(self)
-                else:
-                    # ev_read: ignore old signature (< 1.8)
-                    if len(getfullargspec(self.eh.ev_read)[0]) != 2:
-                        ### FUTURE (2.x) ###
-                        self.eh.ev_read(self, node, sname, msg)
+                # /!\ NOT elif
+                if not _eh_sigspec_ev_read_17(self.eh.ev_read):
+                    ### FUTURE (2.x) ###
+                    self.eh.ev_read(self, node, sname, msg)
         else:
             self.current_msg = msg
             if self.eh is not None:
                 # ev_read: check for old signature first (< 1.8)
-                if len(getfullargspec(self.eh.ev_read)[0]) == 2:
+                if _eh_sigspec_ev_read_17(self.eh.ev_read):
                     self.eh.ev_read(self)
                 else:
                     ### FUTURE (2.x) ###
@@ -571,20 +582,18 @@ class StreamWorker(Worker):
         if sname == 'stderr':
             self.current_errmsg = msg
             if self.eh is not None:
-                # this part is tricky to support backward compatibility...
-                # check for deprecated ev_error (< 1.8)
-                if hasattr(self.eh, 'ev_error'):
+                # call old ev_error for compat (default is no-op)
+                if hasattr(self.eh, 'ev_error'):  # missing in 1.8.0!
                     self.eh.ev_error(self)
-                else:
-                    # ev_read: ignore old signature (< 1.8)
-                    if len(getfullargspec(self.eh.ev_read)[0]) != 2:
-                        ### FUTURE (2.x) ###
-                        self.eh.ev_read(self, key, sname, msg)
+                # /!\ NOT elif
+                if not _eh_sigspec_ev_read_17(self.eh.ev_read):
+                    ### FUTURE (2.x) ###
+                    self.eh.ev_read(self, key, sname, msg)
         else:
             self.current_msg = msg
             if self.eh is not None:
                 # ev_read: check for old signature first (< 1.8)
-                if len(getfullargspec(self.eh.ev_read)[0]) == 2:
+                if _eh_sigspec_ev_read_17(self.eh.ev_read):
                     self.eh.ev_read(self)
                 else:
                     ### FUTURE (2.x) ###
@@ -595,11 +604,15 @@ class StreamWorker(Worker):
         self.task._timeout_add(self, key)
 
         # trigger timeout event (deprecated in 1.8+)
+        # also use hasattr check because ev_timeout was missing in 1.8.0
         if self.eh and hasattr(self.eh, 'ev_timeout'):
             self.eh.ev_timeout(self)
 
     def abort(self):
-        """Abort processing any action by this worker."""
+        """Abort processing any action by this worker.
+
+        Safe to call on an already closing or aborting worker.
+        """
         self.clients[0].abort()
 
     def read(self, node=None, sname='stdout'):

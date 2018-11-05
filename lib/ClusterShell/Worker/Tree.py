@@ -334,7 +334,7 @@ class TreeWorker(DistantWorker):
 
         self._target_count += len(targets)
 
-        self.gwtargets[str(gateway)] = targets.copy()
+        self.gwtargets.setdefault(str(gateway), NodeSet()).add(targets)
 
         # tar commands are built here and launched on targets
         if reverse:
@@ -360,12 +360,31 @@ class TreeWorker(DistantWorker):
 
         self._target_count += len(targets)
 
-        self.gwtargets[str(gateway)] = targets.copy()
+        self.gwtargets.setdefault(str(gateway), NodeSet()).add(targets)
 
         pchan = self.task._pchannel(gateway, self)
         pchan.shell(nodes=targets, command=cmd, worker=self, timeout=timeout,
                     stderr=self.stderr, gw_invoke_cmd=self.invoke_gateway,
                     remote=self.remote)
+
+    def _relaunch(self, previous_gateway):
+        """Redistribute and relaunch commands on targets that were running
+        on previous_gateway (which is probably marked unreachable by now)
+
+        NOTE: Relaunch is always called after failed remote execution, so
+        previous_gateway must be defined. However, it is not guaranteed that
+        the relaunch is going to be performed using gateways (that's a feature).
+        """
+        targets = self.gwtargets[previous_gateway].copy()
+        self.logger.debug("_relaunch on targets %s from previous_gateway %s",
+                          targets, previous_gateway)
+
+        for target in targets:
+            self.gwtargets[previous_gateway].remove(target)
+
+        self._check_fini(previous_gateway)
+        self._target_count -= len(targets)
+        self._launch(targets)
 
     def _engine_clients(self):
         """
@@ -399,10 +418,10 @@ class TreeWorker(DistantWorker):
 
         # finalize rcopy: extract tar data
         if self.source and self.reverse:
-            for node, buf in self._rcopy_bufs.items():
-                tarfileobj = self._rcopy_tars[node]
+            for bnode, buf in self._rcopy_bufs.items():
+                tarfileobj = self._rcopy_tars[bnode]
                 if len(buf) > 0:
-                    self.logger.debug("flushing node %s buf %d bytes", node,
+                    self.logger.debug("flushing node %s buf %d bytes", bnode,
                                       len(buf))
                     tarfileobj.write(buf)
                 tarfileobj.flush()
@@ -410,11 +429,11 @@ class TreeWorker(DistantWorker):
                 tmptar = tarfile.open(fileobj=tarfileobj)
                 try:
                     self.logger.debug("%s extracting %d members in dest %s",
-                                      node, len(tmptar.getmembers()),
+                                      bnode, len(tmptar.getmembers()),
                                       self.dest)
                     tmptar.extractall(path=self.dest)
                 except IOError as ex:
-                    self._on_remote_node_msgline(node, ex, 'stderr', gateway)
+                    self._on_remote_node_msgline(bnode, ex, 'stderr', gateway)
                 finally:
                     tmptar.close()
             self._rcopy_bufs = {}
@@ -462,6 +481,7 @@ class TreeWorker(DistantWorker):
         if self._close_count >= self._target_count:
             handler = self.eh
             if handler:
+                # also use hasattr check because ev_timeout was missing in 1.8.0
                 if self._has_timeout and hasattr(handler, 'ev_timeout'):
                     handler.ev_timeout(self)
                 _eh_sigspec_invoke_compat(handler.ev_close, 2, self,
