@@ -1,6 +1,6 @@
 #
 # Copyright (C) 2008-2016 CEA/DAM
-# Copyright (C) 2015-2017 Stephane Thiell <sthiell@stanford.edu>
+# Copyright (C) 2015-2018 Stephane Thiell <sthiell@stanford.edu>
 #
 # This file is part of ClusterShell.
 #
@@ -36,8 +36,8 @@ import sys
 from ClusterShell.CLI.Error import GENERIC_ERRORS, handle_generic_error
 from ClusterShell.CLI.OptionParser import OptionParser
 
-from ClusterShell.NodeSet import NodeSet, RangeSet
-from ClusterShell.NodeSet import grouplist, std_group_resolver
+from ClusterShell.NodeSet import NodeSet, RangeSet, std_group_resolver
+from ClusterShell.NodeSet import grouplist, set_std_group_resolver_config
 from ClusterShell.NodeUtils import GroupSourceNoUpcall
 
 
@@ -59,7 +59,9 @@ def compute_nodeset(xset, args, autostep):
     """Apply operations and operands from args on xset, an initial
     RangeSet or NodeSet."""
     class_set = xset.__class__
-    # Process operations
+    # Process operations from command arguments.
+    # The special argument string "-" indicates to read stdin.
+    # We also take care of multiline shell arguments (#394).
     while args:
         arg = args.pop(0)
         if arg in ("-i", "--intersection"):
@@ -67,25 +69,27 @@ def compute_nodeset(xset, args, autostep):
             if val == '-':
                 process_stdin(xset.intersection_update, class_set, autostep)
             else:
-                xset.intersection_update(class_set(val, autostep=autostep))
+                xset.intersection_update(class_set.fromlist(val.splitlines(),
+                                                            autostep=autostep))
         elif arg in ("-x", "--exclude"):
             val = args.pop(0)
             if val == '-':
                 process_stdin(xset.difference_update, class_set, autostep)
             else:
-                xset.difference_update(class_set(val, autostep=autostep))
+                xset.difference_update(class_set.fromlist(val.splitlines(),
+                                                          autostep=autostep))
         elif arg in ("-X", "--xor"):
             val = args.pop(0)
             if val == '-':
                 process_stdin(xset.symmetric_difference_update, class_set,
                               autostep)
             else:
-                xset.symmetric_difference_update(class_set(val,
-                                                           autostep=autostep))
+                xset.symmetric_difference_update(
+                    class_set.fromlist(val.splitlines(), autostep=autostep))
         elif arg == '-':
             process_stdin(xset.update, xset.__class__, autostep)
         else:
-            xset.update(class_set(arg, autostep=autostep))
+            xset.update(class_set.fromlist(arg.splitlines(), autostep=autostep))
 
     return xset
 
@@ -154,11 +158,13 @@ def nodeset():
     usage = "%prog [COMMAND] [OPTIONS] [ns1 [-ixX] ns2|...]"
 
     parser = OptionParser(usage)
+    parser.install_groupsconf_option()
     parser.install_nodeset_commands()
     parser.install_nodeset_operations()
     parser.install_nodeset_options()
     (options, args) = parser.parse_args()
 
+    set_std_group_resolver_config(options.groupsconf)
     group_resolver = std_group_resolver()
 
     if options.debug:
@@ -258,8 +264,9 @@ def nodeset():
     if options.list > 0 or options.listall > 0:
         return command_list(options, xset, group_resolver)
 
-    # Interprete special characters (may raise SyntaxError)
-    separator = eval('\'%s\'' % options.separator, {"__builtins__":None}, {})
+    # Interpret special characters (may raise SyntaxError)
+    separator = eval('\'\'\'%s\'\'\'' % options.separator,
+                     {"__builtins__":None}, {})
 
     if options.slice_rangeset:
         _xset = class_set()
@@ -289,7 +296,7 @@ def nodeset():
         # convert to string for sample as nsiter() is slower for big
         # nodesets; and we assume options.pick will remain small-ish
         keep = random.sample(list(xset), options.pick)
-        # explicit class_set creation and str() convertion for RangeSet
+        # explicit class_set creation and str() conversion for RangeSet
         keep = class_set(','.join([str(x) for x in keep]))
         xset.intersection_update(keep)
 

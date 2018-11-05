@@ -120,7 +120,7 @@ class NodeSetBase(object):
     otherwise it may be referenced (should be seen as an ownership transfer
     upon creation).
 
-    This class implements core node set arithmetics (no string parsing here).
+    This class implements core node set arithmetic (no string parsing here).
 
     Example:
        >>> nsb = NodeSetBase('node%s-ipmi', RangeSet('1-5,7'), False)
@@ -772,10 +772,13 @@ class ParsingEngine(object):
     """
     Class that is able to transform a source into a NodeSetBase.
     """
-    OP_CODES = { 'update': ',',
-                 'difference_update': '!',
-                 'intersection_update': '&',
-                 'symmetric_difference_update': '^' }
+
+    OP_CODES = {',': 'update',
+                '!': 'difference_update',
+                '&': 'intersection_update',
+                '^': 'symmetric_difference_update'}
+
+    OP_CODES_PAT = '[%s]' % re.escape(''.join(OP_CODES.keys()))
 
     BRACKET_OPEN = '['
     BRACKET_CLOSE = ']'
@@ -953,14 +956,11 @@ class ParsingEngine(object):
 
     def _next_op(self, pat):
         """Opcode parsing subroutine."""
-        op_idx = -1
-        next_op_code = None
-        for opc, idx in [(k, pat.find(v))
-                         for k, v in ParsingEngine.OP_CODES.items()]:
-            if idx >= 0 and (op_idx < 0 or idx <= op_idx):
-                next_op_code = opc
-                op_idx = idx
-        return op_idx, next_op_code
+        mobj = re.search(ParsingEngine.OP_CODES_PAT, pat)
+        if mobj:
+            return mobj.span()[0], mobj.group()
+        else:
+            return -1, None
 
     def _scan_string_single(self, nsstr, autostep):
         """Single node scan, returns (pat, list of rangesets)"""
@@ -998,7 +998,7 @@ class ParsingEngine(object):
 
     def _scan_string(self, nsstr, autostep):
         """Parsing engine's string scanner method (iterator)."""
-        next_op_code = 'update'
+        next_op_code = ','  # if no operator, default one is to update nodeset
         while nsstr:
             # Ignore whitespace(s) for convenience
             nsstr = nsstr.lstrip()
@@ -1072,11 +1072,11 @@ class ParsingEngine(object):
                 if op_idx < 0:
                     nsstr = None
                 else:
-                    opc = self.OP_CODES[next_op_code]
-                    sfx, nsstr = sfx.split(opc, 1)
+                    sfx, nsstr = sfx.split(next_op_code, 1)
                     # Detected character operator so right operand is mandatory
                     if not nsstr:
-                        msg = "missing nodeset operand with '%s' operator" % opc
+                        msg = "missing nodeset operand with '%s' " \
+                              "operator" % next_op_code
                         raise NodeSetParseError(None, msg)
 
                 # Ignore whitespace(s)
@@ -1093,11 +1093,11 @@ class ParsingEngine(object):
                     node = nsstr
                     nsstr = None # break next time
                 else:
-                    opc = self.OP_CODES[next_op_code]
-                    node, nsstr = nsstr.split(opc, 1)
+                    node, nsstr = nsstr.split(next_op_code, 1)
                     # Detected character operator so both operands are mandatory
                     if not node or not nsstr:
-                        msg = "missing nodeset operand with '%s' operator" % opc
+                        msg = "missing nodeset operand with '%s' " \
+                              "operator" % next_op_code
                         raise NodeSetParseError(node or nsstr, msg)
 
                 # Check for illegal closing bracket
@@ -1108,7 +1108,8 @@ class ParsingEngine(object):
                 node = node.rstrip()
                 newpat, rsets = self._scan_string_single(node, autostep)
 
-            yield op_code, newpat, _rsets4nsb(rsets, autostep)
+            op = ParsingEngine.OP_CODES[op_code]
+            yield op, newpat, _rsets4nsb(rsets, autostep)
 
     def _amend_leading_digits(self, outer, inner):
         """Helper to get rid of leading bracket digits.
@@ -1183,7 +1184,7 @@ class NodeSet(NodeSetBase):
     pattern" which adds support for union (special character ","),
     difference ("!"), intersection ("&") and symmetric difference ("^")
     operations. String patterns are read from left to right, by
-    proceeding any character operators accordinately.
+    proceeding any character operators accordingly.
 
     Extended string pattern usage examples:
 
@@ -1230,7 +1231,7 @@ class NodeSet(NodeSetBase):
         is, to fold first dimension using ``[a-b]`` rangeset syntax whenever
         possible). Using `fold_axis` ensures that rangeset won't be folded on
         unspecified axis, but please note however, that using `fold_axis` may
-        lead to suboptimial folding, this is because NodeSet algorithms are
+        lead to suboptimal folding, this is because NodeSet algorithms are
         optimized for folding along all axis (default behavior).
         """
         NodeSetBase.__init__(self, autostep=autostep, fold_axis=fold_axis)
@@ -1571,3 +1572,18 @@ def set_std_group_resolver(new_resolver):
     global RESOLVER_STD_GROUP
     RESOLVER_STD_GROUP = new_resolver or _DEF_RESOLVER_STD_GROUP
 
+def set_std_group_resolver_config(groupsconf, illegal_chars=None):
+    """
+    Helper to create and set std group resolver from a config file path.
+
+    By default, the GroupResolverConfig object is created using
+    illegal_chars=NodeSet.ILLEGAL_GROUP_CHARS.
+
+    This method does nothing if groupsconf is not defined.
+    """
+    if groupsconf:
+        if illegal_chars is None:
+            illegal_chars = ILLEGAL_GROUP_CHARS
+        group_resolver = NodeUtils.GroupResolverConfig(groupsconf,
+                                                       illegal_chars)
+        set_std_group_resolver(group_resolver)

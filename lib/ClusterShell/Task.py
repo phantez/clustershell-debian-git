@@ -352,7 +352,7 @@ class Task(object):
     def default_excepthook(self, exc_type, exc_value, tb):
         """Default excepthook for a newly Task. When an exception is
         raised and uncaught on Task thread, excepthook is called, which
-        is default_excepthook by default. Once excepthook overriden,
+        is default_excepthook by default. Once excepthook overridden,
         you can still call default_excepthook if needed."""
         print('Exception in thread %s:' % self.thread, file=sys.stderr)
         traceback.print_exception(exc_type, exc_value, tb, file=sys.stderr)
@@ -529,7 +529,7 @@ class Task(object):
         presence of the nodes parameter) and immediately schedules it for
         execution in task's runloop. So, if the task is already running
         (ie. called from an event handler), the command is started immediately,
-        assuming current execution contraintes are met (eg. fanout value). If
+        assuming current execution constraints are met (eg. fanout value). If
         the task is not running, the command is not started but scheduled for
         late execution. See resume() to start task runloop.
 
@@ -1288,7 +1288,7 @@ class Task(object):
         """
         Class method that blocks calling thread until all tasks have
         finished (from a ClusterShell point of view, for instance,
-        their task.resume() return). It doesn't necessarly mean that
+        their task.resume() return). It doesn't necessarily mean that
         associated threads have finished.
         """
         Task._task_lock.acquire()
@@ -1312,12 +1312,13 @@ class Task(object):
         if gwstr not in self.gateways:
             chan = PropagationChannel(self, gateway)
             logger = logging.getLogger(__name__)
-            logger.info("pchannel: creating new channel %s", chan)
+            logger.debug("pchannel: creating new channel %s", chan)
             # invoke gateway
             timeout = None # FIXME: handle timeout for gateway channels
             wrkcls = self.default('distant_worker')
             chanworker = wrkcls(gateway, command=metaworker.invoke_gateway,
                                 handler=chan, stderr=True, timeout=timeout)
+            chanworker._update_task_rc = False
             # gateway is special! define worker._fanout to not rely on the
             # engine's fanout, and use the special value FANOUT_UNLIMITED to
             # always allow registration of gateways
@@ -1355,7 +1356,7 @@ class Task(object):
             chanworker, metaworkers = self.gateways[gwstr]
             metaworkers.remove(metaworker)
             if len(metaworkers) == 0:
-                logger.info("pchannel_release: destroying channel %s",
+                logger.debug("pchannel_release: destroying channel %s",
                             chanworker.eh)
                 chanworker.abort()
                 # delete gateway reference
