@@ -1,9 +1,10 @@
-clustershell (1.8.1-2) UNRELEASED; urgency=medium
+clustershell (1.8.1-2) unstable; urgency=medium
 
+  * Team upload.
   * Use debhelper-compat instead of debian/compat.
   * Drop Python 2 support.
 
- -- Ondřej Nový <onovy@debian.org>  Sat, 20 Jul 2019 00:53:18 +0200
+ -- Ondřej Nový <onovy@debian.org>  Sun, 25 Aug 2019 10:22:21 +0200
 
 clustershell (1.8.1-1) unstable; urgency=medium
 
