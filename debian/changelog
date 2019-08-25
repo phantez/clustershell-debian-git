@@ -1,6 +1,7 @@
 clustershell (1.8.1-2) UNRELEASED; urgency=medium
 
   * Use debhelper-compat instead of debian/compat.
+  * Drop Python 2 support.
 
  -- Ondřej Nový <onovy@debian.org>  Sat, 20 Jul 2019 00:53:18 +0200
 
