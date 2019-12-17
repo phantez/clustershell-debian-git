@@ -60,7 +60,7 @@ try:
 except NameError:
     basestring = str
 
-from ClusterShell.Defaults import config_paths
+from ClusterShell.Defaults import config_paths, DEFAULTS
 import ClusterShell.NodeUtils as NodeUtils
 
 # Import all RangeSet module public objects
@@ -137,6 +137,8 @@ class NodeSetBase(object):
         self._length = 0
         self._patterns = {}
         self.fold_axis = fold_axis  #: iterable over nD 0-indexed axis
+        if self.fold_axis is None and DEFAULTS.fold_axis:
+            self.fold_axis = DEFAULTS.fold_axis  # non-empty tuple
         if pattern:
             self._add(pattern, rangeset, copy_rangeset)
         elif rangeset:
@@ -543,14 +545,14 @@ class NodeSetBase(object):
 
     def update(self, other):
         """
-        s.update(t) returns nodeset s with elements added from t.
+        s.update(t) updates nodeset s with elements added from t.
         """
         for pat, rangeset in other._patterns.items():
             self._add(pat, rangeset)
 
     def updaten(self, others):
         """
-        s.updaten(list) returns nodeset s with elements added from given list.
+        s.updaten(list) updates nodeset s with elements added from given list.
         """
         for other in others:
             self.update(other)
@@ -590,7 +592,7 @@ class NodeSetBase(object):
 
     def intersection_update(self, other):
         """
-        ``s.intersection_update(t)`` returns nodeset s keeping only
+        ``s.intersection_update(t)`` updates nodeset s keeping only
         elements also found in t.
         """
         if other is self:
@@ -710,7 +712,7 @@ class NodeSetBase(object):
 
     def symmetric_difference_update(self, other):
         """
-        ``s.symmetric_difference_update(t)`` returns nodeset s keeping all
+        ``s.symmetric_difference_update(t)`` updates nodeset s keeping all
         nodes that are in exactly one of the nodesets.
         """
         purge_patterns = []
@@ -788,7 +790,7 @@ class ParsingEngine(object):
         Initialize Parsing Engine.
         """
         self.group_resolver = group_resolver
-        self.base_node_re = re.compile("(\D*)(\d*)")
+        self.base_node_re = re.compile(r"(\D*)(\d*)")
         self.node_wc = node_wildcard_enable  # node wildcard support
 
     def parse(self, nsobj, autostep):
