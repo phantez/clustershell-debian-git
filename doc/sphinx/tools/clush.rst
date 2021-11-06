@@ -589,6 +589,8 @@ output nodeset header::
     ---------------
     ok
 
+NO_COLOR, CLICOLOR_FORCE and CLICOLOR environment variables can also
+be used to change the way *clush* uses colors to display messages.
 
 .. _clush-worker:
 
@@ -633,6 +635,8 @@ By default, ClusterShell supports the following worker identifiers:
   installed; doesn't provide write support (eg. you cannot ``cat file | clush
   --worker pdsh``); it is primarily an 1-to-n worker example.
 
+Worker modules distributed outside of ClusterShell are also supported by
+specifying the case-sensitive full Python module name of a worker module.
 
 .. [#] LLNL parallel remote shell utility
    (https://computing.llnl.gov/linux/pdsh.html)
