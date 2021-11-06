@@ -64,6 +64,13 @@ The following table describes available *clush* config file settings.
 | node_count      | Should *clush* display additional (node count)     |
 |                 | information in buffer header? (yes/no)             |
 +-----------------+----------------------------------------------------+
+| maxrc           | Should *clush* return the largest of command       |
+|                 | return codes? (yes/no)                             |
+|                 | If set to no (the default), *clush* exit status    |
+|                 | gives no information about command return codes,   |
+|                 | but rather reports on *clush* execution itself     |
+|                 | (zero indicating a successful run).                |
++-----------------+----------------------------------------------------+
 | verbosity       | Set the verbosity level: 0 (quiet), 1 (default),   |
 |                 | 2 (verbose) or more (debug).                       |
 +-----------------+----------------------------------------------------+
@@ -235,6 +242,11 @@ Here is an example of **/etc/clustershell/groups.d/cluster.yaml**::
         login: 'login[1-2]'
         compute: 'node[0001-0288]'
         gpu: 'node[0001-0008]'
+
+        servers:                         # example of yaml list syntax for nodes
+            - 'server001'                # in a group
+            - 'server002,server101'                
+            - 'server[003-006]'
 
         cpu_only: '@compute!@gpu'        # example of inline set operation
                                          # define group @cpu_only with node[0009-0288]

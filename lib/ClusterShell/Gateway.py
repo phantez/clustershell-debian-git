@@ -255,6 +255,11 @@ class GatewayChannel(Channel):
                 task._info.update(taskinfo)
                 task.set_info('print_debug', _gw_print_debug)
 
+                for infokey in taskinfo:
+                    if infokey.startswith('tree_default:'):
+                        self.logger.debug('Setting default %s to %s', infokey[13:], taskinfo[infokey])
+                        task.set_default(infokey[13:], taskinfo[infokey])
+
                 if task.info('debug'):
                     self.logger.setLevel(logging.DEBUG)
 
@@ -324,6 +329,14 @@ def gateway_main():
     logger = logging.getLogger(__name__)
     sys.excepthook = gateway_excepthook
 
+    if sys.stdin is None:
+        logger.critical('Gateway failure: sys.stdin is None')
+        sys.exit(1)
+
+    if sys.stdin.isatty():
+        logger.critical('Gateway failure: sys.stdin.isatty() is True')
+        sys.exit(1)
+
     logger.debug('Starting gateway on %s', host)
     logger.debug("environ=%s", os.environ)
 
@@ -337,10 +350,6 @@ def gateway_main():
     # Disable MsgTree buffering, it is enabled later when needed
     task.set_default("stdout_msgtree", False)
     task.set_default("stderr_msgtree", False)
-
-    if sys.stdin.isatty():
-        logger.critical('Gateway failure: sys.stdin.isatty() is True')
-        sys.exit(1)
 
     gateway = GatewayChannel(task)
     worker = StreamWorker(handler=gateway)

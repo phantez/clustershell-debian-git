@@ -1,3 +1,10 @@
+clustershell (1.8.4-1) unstable; urgency=medium
+
+  * New upstream release 1.8.4
+  * Debian policy 4.6.0.1, no changes required
+
+ -- Stéphan Gorget <phantez@gmail.com>  Sat, 6 Nov 2021 22:37:00 +0100
+
 clustershell (1.8.3-2) unstable; urgency=medium
 
   [ Ondřej Nový ]

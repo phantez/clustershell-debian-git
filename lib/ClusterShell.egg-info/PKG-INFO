@@ -1,12 +1,12 @@
 Metadata-Version: 1.1
 Name: ClusterShell
-Version: 1.8.3
+Version: 1.8.4
 Summary: ClusterShell library and tools
 Home-page: http://clustershell.sourceforge.net/
 Author: Stephane Thiell
 Author-email: sthiell@stanford.edu
 License: LGPLv2+
-Download-URL: http://sourceforge.net/projects/clustershell/files/clustershell/1.8.3/
+Download-URL: http://sourceforge.net/projects/clustershell/files/clustershell/1.8.4/
 Description: ClusterShell is an event-driven open source Python framework, designed to run
         local or distant commands in parallel on server farms or on large Linux
         clusters. It will take care of common issues encountered on HPC clusters, such
