@@ -5,7 +5,7 @@ clustershell (1.8.4-1) unstable; urgency=medium
   * Remove constraints unnecessary since buster:
     + Build-Depends: Drop versioned constraint on python3-all.
 
- -- Stéphan Gorget <phantez@gmail.com>  Sat, 6 Nov 2021 22:37:00 +0100
+ -- Stéphan Gorget <phantez@gmail.com>  Wed, 02 Feb 2022 21:09:23 -0000
 
 clustershell (1.8.3-2) unstable; urgency=medium
 
