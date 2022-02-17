@@ -1,1 +1,4 @@
-Repository: https://github.com/cea-hpc/clustershell
+Bug-Database: https://github.com/cea-hpc/clustershell/issues
+Bug-Submit: https://github.com/cea-hpc/clustershell/issues/new
+Repository: https://github.com/cea-hpc/clustershell.git
+Repository-Browse: https://github.com/cea-hpc/clustershell
