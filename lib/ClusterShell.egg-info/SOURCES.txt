@@ -7,6 +7,9 @@ setup.py
 conf/clush.conf
 conf/groups.conf
 conf/topology.conf.example
+conf/clush.conf.d/README
+conf/clush.conf.d/sshpass.conf.example
+conf/clush.conf.d/sudo.conf.example
 conf/groups.conf.d/README
 conf/groups.conf.d/ace.conf.example
 conf/groups.conf.d/genders.conf.example
@@ -49,6 +52,7 @@ doc/sphinx/api/Task.rst
 doc/sphinx/api/index.rst
 doc/sphinx/api/workers/ExecWorker.rst
 doc/sphinx/api/workers/StreamWorker.rst
+doc/sphinx/api/workers/TreeWorker.rst
 doc/sphinx/api/workers/Worker.rst
 doc/sphinx/api/workers/WorkerPdsh.rst
 doc/sphinx/api/workers/WorkerPopen.rst

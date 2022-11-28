@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # Copyright (C) 2008-2016 CEA/DAM
-# Copyright (C) 2016-2021 Stephane Thiell <sthiell@stanford.edu>
+# Copyright (C) 2016-2022 Stephane Thiell <sthiell@stanford.edu>
 #
 # This file is part of ClusterShell.
 #
@@ -23,7 +23,7 @@ import os
 from setuptools import setup, find_packages
 
 
-VERSION = '1.8.4'
+VERSION = '1.9'
 
 # Default CFGDIR: in-prefix config install (rpmbuild or pip as user)
 CFGDIR = 'etc/clustershell'
@@ -46,6 +46,10 @@ setup(name='ClusterShell',
                    ['conf/clush.conf',
                     'conf/groups.conf',
                     'conf/topology.conf.example']),
+                  (os.path.join(CFGDIR, 'clush.conf.d'),
+                   ['conf/clush.conf.d/sshpass.conf.example',
+                    'conf/clush.conf.d/sudo.conf.example',
+                    'conf/clush.conf.d/README']),
                   (os.path.join(CFGDIR, 'groups.conf.d'),
                    ['conf/groups.conf.d/genders.conf.example',
                     'conf/groups.conf.d/slurm.conf.example',

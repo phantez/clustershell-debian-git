@@ -1,6 +1,6 @@
 #
 # Copyright (C) 2007-2016 CEA/DAM
-# Copyright (C) 2015-2018 Stephane Thiell <sthiell@stanford.edu>
+# Copyright (C) 2015-2022 Stephane Thiell <sthiell@stanford.edu>
 #
 # This file is part of ClusterShell.
 #
@@ -33,11 +33,13 @@ When no command are specified, clush runs interactively.
 
 from __future__ import print_function
 
+import getpass
 import logging
 import os
 from os.path import abspath, dirname, exists, isdir, join
 import random
 import resource
+import shlex
 import signal
 import sys
 import time
@@ -160,6 +162,38 @@ class DirectOutputHandler(OutputHandler):
                                      "%s: %s: command timeout" %
                                      (self._prog, nodeset))
         self.update_prompt(worker)
+
+class DirectOutputDirHandler(DirectOutputHandler):
+    """Direct output files event handler class. pssh style"""
+    def __init__(self, display, ns, prog=None):
+        DirectOutputHandler.__init__(self, display, prog)
+        self._ns = ns
+        self._outfiles = {}
+        self._errfiles = {}
+        if display.outdir:
+            for n in self._ns:
+               self._outfiles[n] = open(join(display.outdir, n), mode="w")
+        if display.errdir:
+            for n in self._ns:
+               self._errfiles[n] = open(join(display.errdir, n), mode="w")
+
+    def ev_read(self, worker, node, sname, msg):
+        DirectOutputHandler.ev_read(self, worker, node, sname, msg)
+        if sname == worker.SNAME_STDOUT:
+            if self._display.outdir:
+                self._outfiles[node].write("{}\n".format(msg.decode()))
+        elif sname == worker.SNAME_STDERR:
+            if self._display.errdir:
+                self._errfiles[node].write("{}\n".format(msg.decode()))
+
+    def ev_close(self, worker, timedout):
+        DirectOutputHandler.ev_close(self, worker, timedout)
+        if self._display.outdir:
+            for v in self._outfiles.values():
+                v.close()
+        if self._display.errdir:
+            for v in self._errfiles.values():
+                v.close()
 
 class DirectProgressOutputHandler(DirectOutputHandler):
     """Direct output event handler class with progress support."""
@@ -608,6 +642,9 @@ def ttyloop(task, nodeset, timeout, display, remote, trytree):
                     continue
                 if readline_avail:
                     readline.write_history_file(get_history_file())
+                if task.default("USER_command_prefix"):
+                    prefix_cmdl = shlex.split(task.default("USER_command_prefix"))
+                    cmd = "%s %s" % (' '.join(prefix_cmdl), cmd)
                 run_command(task, cmd, ns, timeout, display, remote, trytree)
     return rc
 
@@ -645,10 +682,9 @@ def bind_stdin(worker, display):
     # can be a file, so we cannot use a WorkerSimple here as polling on file
     # may result in different behaviors depending on selected engine.
     stdin_thread = threading.Thread(None, _stdin_thread_start, args=(port, display))
-    # setDaemon because we're sometimes left with data that has been read and
-    # ssh connection already closed.
-    # Syntax for compat with Python < 2.6
-    stdin_thread.setDaemon(True)
+    # Set thread as daemon because we're sometimes left with data that have
+    # been read but the ssh connection is already closed.
+    stdin_thread.daemon = True
     stdin_thread.start()
 
 def run_command(task, cmd, ns, timeout, display, remote, trytree):
@@ -672,17 +708,29 @@ def run_command(task, cmd, ns, timeout, display, remote, trytree):
     elif display.progress and display.verbosity > VERB_QUIET:
         handler = DirectProgressOutputHandler(display)
         handler.runtimer_init(task, len(ns))
+    elif (display.outdir or display.errdir) and ns is not None:
+        if display.outdir and not exists(display.outdir):
+            os.makedirs(display.outdir)
+        if display.errdir and not exists(display.errdir):
+            os.makedirs(display.errdir)
+        handler = DirectOutputDirHandler(display, ns)
     else:
         # this is the simpler but faster output handler
         handler = DirectOutputHandler(display)
 
+    stdin = task.default("USER_stdin_worker")      # stdin forwarding?
+    prompt_passwd = task.default("USER_password_prompt")  # from --mode
     worker = task.shell(cmd, nodes=ns, handler=handler, timeout=timeout,
-                        remote=remote, tree=trytree)
+                        remote=remote, tree=trytree,
+                        stdin=stdin or prompt_passwd is not None)
     if ns is None:
         worker.set_key('LOCAL')
-    if task.default("USER_stdin_worker"):
+    if prompt_passwd:
+        worker.write(prompt_passwd.encode() + b'\n')
+    if stdin:
         bind_stdin(worker, display)
-
+    if prompt_passwd and not stdin:
+        worker.set_write_eof() # we only enabled stdin to send the password
     task.resume()
 
 def run_copy(task, sources, dest, ns, timeout, preserve_flag, display):
@@ -743,6 +791,10 @@ def set_fdlimit(fd_max, display):
             # Most probably the requested limit exceeds the system imposed limit
             msgfmt = 'Warning: Failed to set max open files limit to %d (%s)'
             display.vprint_err(VERB_VERB, msgfmt % (rlim_max, exc))
+
+def ask_pass():
+    """Prompt for password (--mode with password_prompt=True)"""
+    return getpass.getpass()
 
 def clush_exit(status, task=None):
     """Exit script, flushing stdio buffers and stopping ClusterShell task."""
@@ -977,6 +1029,26 @@ def main():
     task.set_info("debug", config.verbosity >= VERB_DEBUG)
     task.set_info("fanout", config.fanout)
 
+    if options.mode:
+        display.vprint(VERB_DEBUG, "ClushConfig parsed: %s" % config.parsed)
+        display.vprint(VERB_DEBUG, "Available run modes: %s" % ' '.join(config.modes()))
+        config.set_mode(options.mode)
+        display.vprint(VERB_VERB, "[%s] run mode activated" % options.mode)
+
+    command_prefix = config.command_prefix
+    if command_prefix:
+        # keep command_prefix for interactive mode ttyloop()
+        task.set_default("USER_command_prefix", command_prefix)
+        prefix_cmdl = shlex.split(command_prefix)
+        display.vprint(VERB_VERB, "[%s] command prefix: %s" % \
+                       (options.mode, prefix_cmdl))
+        args = prefix_cmdl + args  # amend actual command with prefix
+
+    if config.password_prompt:
+        display.vprint(VERB_VERB, "[%s] password prompt enabled" % options.mode)
+        # prompt for password
+        task.set_default("USER_password_prompt", ask_pass())
+
     if options.worker:
         try:
             if options.remote == 'no':
@@ -1031,9 +1103,6 @@ def main():
 
     # Enable stdout/stderr separation
     task.set_default("stderr", not options.gatherall)
-
-    # Prevent reading from stdin?
-    task.set_default("stdin", not options.nostdin)
 
     # Disable MsgTree buffering if not gathering outputs
     task.set_default("stdout_msgtree", display.gather or display.line_mode)

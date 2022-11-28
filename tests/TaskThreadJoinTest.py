@@ -106,7 +106,7 @@ class TaskThreadJoinTest(unittest.TestCase):
         class TestUnhandledException(Exception):
             """test exception"""
         class RaiseOnRead(EventHandler):
-            def ev_read(self, worker):
+            def ev_read(self, worker, node, sname, msg):
                 raise TestUnhandledException("you should see this exception")
 
         task = Task()
@@ -118,3 +118,13 @@ class TaskThreadJoinTest(unittest.TestCase):
         time.sleep(1) # for pretty display, because unhandled exception
                       # traceback may be sent to stderr after the join()
         self.assertFalse(task.running())
+
+    def testThreadTaskWaitWhenNotStarted(self):
+        """test task_wait() when workers not started"""
+
+        for i in range(1, 5):
+            task = Task()
+            task.shell("sleep %d" % i)
+
+        task_wait()
+        task.resume()

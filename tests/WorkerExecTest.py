@@ -45,6 +45,7 @@ class ExecTest(unittest.TestCase):
         self.assertEqual(task_self().max_retcode(), 1)
         self.assertEqual(task_self().node_buffer('localhost'), b'')
 
+    @unittest.skipIf(HOSTNAME == 'localhost', "does not work with hostname set to 'localhost'")
     def test_timeout(self):
         """test ExecWorker with a timeout"""
         nodes = "localhost,%s" % HOSTNAME
@@ -67,6 +68,7 @@ class ExecTest(unittest.TestCase):
         self.assertRaises(WorkerError, self.execw,
                           nodes="localhost", handler=None, command="echo %")
 
+    @unittest.skipIf(HOSTNAME == 'localhost', "does not work with hostname set to 'localhost'")
     def test_rank_placeholder(self):
         """test ExecWorker with several nodes and %n (rank)"""
         nodes = "localhost,%s" % HOSTNAME
@@ -156,7 +158,7 @@ class ExecTest(unittest.TestCase):
         """test ExecWorker.abort() on read"""
 
         class TestH(EventHandler):
-            def ev_read(self, worker):
+            def ev_read(self, worker, node, sname, msg):
                 worker.abort()
                 worker.abort()  # safe but no effect
 
