@@ -215,12 +215,14 @@ class CLIClushTest_A(unittest.TestCase):
         finally:
             delattr(ClusterShell.CLI.Clush, '_f_user_interaction')
 
+    @unittest.skipIf(HOSTNAME == 'localhost', "does not work with hostname set to 'localhost'")
     def test_010_diff(self):
         """test clush (diff)"""
         self._clush_t(["-w", HOSTNAME, "--diff", "echo", "ok"], None, b"")
         self._clush_t(["-w", "%s,localhost" % HOSTNAME, "--diff", "echo",
                        "ok"], None, b"")
 
+    @unittest.skipIf(HOSTNAME == 'localhost', "does not work with hostname set to 'localhost'")
     def test_011_diff_tty(self):
         """test clush (diff) [tty]"""
         setattr(ClusterShell.CLI.Clush, '_f_user_interaction', True)
@@ -229,6 +231,7 @@ class CLIClushTest_A(unittest.TestCase):
         finally:
             delattr(ClusterShell.CLI.Clush, '_f_user_interaction')
 
+    @unittest.skipIf(HOSTNAME == 'localhost', "does not work with hostname set to 'localhost'")
     def test_012_diff_null(self):
         """test clush (diff w/o output)"""
         rxs = r"^--- %s\n\+\+\+ localhost\n@@ -1(,1)? \+[01],0 @@\n-ok\n$" % HOSTNAME
@@ -268,6 +271,7 @@ class CLIClushTest_A(unittest.TestCase):
         finally:
             delattr(ClusterShell.CLI.Clush, '_f_user_interaction')
 
+    @unittest.skipIf(HOSTNAME == 'localhost', "does not work with hostname set to 'localhost'")
     def test_017_retcodes(self):
         """test clush (retcodes)"""
         s = "clush: %s: exited with exit code 1\n" % HOSTNAME
@@ -301,6 +305,7 @@ class CLIClushTest_A(unittest.TestCase):
                       s.encode())
         self._clush_t(["-w", duo, "-S", "-b", "-q", "/bin/false"], None, b"", 1)
 
+    @unittest.skipIf(HOSTNAME == 'localhost', "does not work with hostname set to 'localhost'")
     def test_018_retcodes_tty(self):
         """test clush (retcodes) [tty]"""
         setattr(ClusterShell.CLI.Clush, '_f_user_interaction', True)
@@ -468,6 +473,7 @@ class CLIClushTest_A(unittest.TestCase):
                        "color=never", "-w", HOSTNAME, "echo", "ok"], None,
                       self.output_ok)
 
+    @unittest.skipIf(HOSTNAME == 'localhost', "does not work with hostname set to 'localhost'")
     def test_031_progress(self):
         """test clush -P/--progress"""
         self._clush_t(["-w", HOSTNAME, "--progress", "echo", "ok"], None,
@@ -518,6 +524,7 @@ class CLIClushTest_A(unittest.TestCase):
         finally:
             delattr(ClusterShell.CLI.Clush, '_f_user_interaction')
 
+    @unittest.skipIf(HOSTNAME == 'localhost', "does not work with hostname set to 'localhost'")
     def test_034_pick(self):
         """test clush --pick"""
         rxs = r"^(localhost|%s): foo\n$" % HOSTNAME
@@ -605,6 +612,118 @@ class CLIClushTest_A(unittest.TestCase):
         self._clush_t(["--conf", custf.name, "-b", "-R", "exec", "-w",
                        "foo[1-10]", "echo ok"], b"",
                       b"---------------\nfoo[1-10]\n---------------\nok\n")
+
+    def test_040_stdin_eof(self):
+        """test clush (stdin eof)"""
+        # should not block if connection to stdin cannot be established
+        # or of --nostdin is specified
+        self._clush_t(["-w", HOSTNAME, "cat"], None, b'')
+        self._clush_t(["-w", HOSTNAME, "--nostdin", "cat"], None, b'')
+        setattr(ClusterShell.CLI.Clush, '_f_user_interaction', True)
+        try:
+            self._clush_t(["-w", HOSTNAME, "cat"], None, b'')
+        finally:
+            delattr(ClusterShell.CLI.Clush, '_f_user_interaction')
+
+    def test_041_outdir_errdir(self):
+        """test clush --outdir and --errdir"""
+        odir = make_temp_dir()
+        edir = make_temp_dir()
+        tofilepath = os.path.join(odir, HOSTNAME)
+        tefilepath = os.path.join(edir, HOSTNAME)
+        try:
+            self._clush_t(["-w", HOSTNAME, "--outdir", odir, "echo", "ok"],
+                          None, self.output_ok)
+            self.assertTrue(os.path.isfile(tofilepath))
+            with open(tofilepath, "r") as f:
+                self.assertEqual(f.read(), "ok\n")
+        finally:
+            os.unlink(tofilepath)
+        try:
+            self._clush_t(["-w", HOSTNAME, "--errdir", edir, "echo", "ok", ">&2"],
+                          None, None, 0, self.output_ok)
+            self.assertTrue(os.path.isfile(tefilepath))
+            with open(tefilepath, "r") as f:
+                self.assertEqual(f.read(), "ok\n")
+        finally:
+            os.unlink(tefilepath)
+        try:
+            serr = "%s: err\n" % HOSTNAME
+            self._clush_t(["-w", HOSTNAME, "--outdir", odir, "--errdir", edir,
+                          "echo", "ok", ";", "echo", "err", ">&2"], None,
+                          self.output_ok, 0, serr.encode())
+            self.assertTrue(os.path.isfile(tofilepath))
+            self.assertTrue(os.path.isfile(tefilepath))
+            with open(tofilepath, "r") as f:
+                self.assertEqual(f.read(), "ok\n")
+            with open(tefilepath, "r") as f:
+                self.assertEqual(f.read(), "err\n")
+        finally:
+            os.unlink(tofilepath)
+            os.unlink(tefilepath)
+        os.rmdir(odir)
+        os.rmdir(edir)
+
+    def test_042_command_prefix(self):
+        """test clush -O command_prefix"""
+        s = "%s: foobar\n" % HOSTNAME
+        self._clush_t(["-O", "command_prefix=echo", "-w", HOSTNAME, "foobar"],
+                      None, s.encode())
+        self._clush_t(["-O", "command_prefix=echo", "--nostdin", "-w", HOSTNAME, "foobar"],
+                      None, s.encode())
+
+    def test_043_password_prompt(self):
+        """test clush -O password_prompt"""
+        def ask_pass_mock():
+            return "passok"
+        ask_pass_save = ClusterShell.CLI.Clush.ask_pass
+        ClusterShell.CLI.Clush.ask_pass = ask_pass_mock
+        try:
+            s = "%s: passok\n" % HOSTNAME
+            expected = s.encode()
+            self._clush_t(["-O", "password_prompt=yes", "-w", HOSTNAME, "cat"],
+                          None, expected)
+            self._clush_t(["-O", "password_prompt=yes", "-w", HOSTNAME, "cat"],
+                          b"test\n", expected+('%s: test\n' % HOSTNAME).encode())
+            self._clush_t(["-O", "password_prompt=yes", "--nostdin", "-w", HOSTNAME, "cat"],
+                          None, expected)
+            self._clush_t(["-O", "password_prompt=yes", "--nostdin", "-w", HOSTNAME, "cat"],
+                          b"test\n", expected)
+            # write to stdin is not supported by pdsh worker
+            self.assertRaises(EngineClientNotSupportedError, self._clush_t,
+                              ["-O", "password_prompt=yes", "-w", HOSTNAME, "-R", "pdsh", "cat"],
+                              b"test stdin", expected, 1)
+            self.assertRaises(EngineClientNotSupportedError, self._clush_t,
+                              ["--nostdin", "-O", "password_prompt=yes", "-w", HOSTNAME, "-R", "pdsh", "cat"],
+                              b"test stdin", expected, 1)
+        finally:
+            ClusterShell.CLI.Clush.ask_pass = ask_pass_save
+
+    def test_044_command_prefix_and_password_prompt(self):
+        """test clush -O command_prefix and -O password_prompt"""
+        def ask_pass_mock():
+            return "passok"
+        ask_pass_save = ClusterShell.CLI.Clush.ask_pass
+        ClusterShell.CLI.Clush.ask_pass = ask_pass_mock
+        try:
+            s = "%s: passok\n" % HOSTNAME
+            expected = s.encode()
+            # using 'exec' command to simulate sudo-like behavior
+            self._clush_t(["-O", "command_prefix=exec", "-O", "password_prompt=yes", "-w", HOSTNAME, "cat"],
+                          None, expected)
+            self._clush_t(["-O", "command_prefix=exec", "-O", "password_prompt=yes", "-w", HOSTNAME, "cat"],
+                          b"test\n", expected+('%s: test\n' % HOSTNAME).encode())
+            self._clush_t(["-O", "command_prefix=exec", "-O", "password_prompt=yes", "--nostdin", "-w", HOSTNAME, "cat"],
+                          None, expected)
+            self._clush_t(["-O", "command_prefix=exec", "-O", "password_prompt=yes", "--nostdin", "-w", HOSTNAME, "cat"],
+                          b"test\n", expected)
+            # test password forwarding followed by stdin stream
+            s = "%s: test stdin\n" % HOSTNAME
+            expected += s.encode()
+            self._clush_t(["-O", "command_prefix=exec", "-O", "password_prompt=yes", "-w", HOSTNAME, "cat"],
+                          b"test stdin\n", expected)
+        finally:
+            ClusterShell.CLI.Clush.ask_pass = ask_pass_save
 
 
 class CLIClushTest_B_StdinFailure(unittest.TestCase):

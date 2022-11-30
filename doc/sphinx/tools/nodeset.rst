@@ -259,6 +259,8 @@ represented using the step syntax (57% of them)::
     node[1,3,5,7,34,39,99]
 
 
+.. _nodeset-zeropadding:
+
 Zero-padding
 ^^^^^^^^^^^^
 
@@ -268,7 +270,7 @@ are automatically padded with zeros as well. For example::
 
     $ nodeset -e node[08-11]
     node08 node09 node10 node11
-    
+
     $ nodeset -f node001 node002 node003 node005
     node[001-003,005]
 
@@ -278,23 +280,20 @@ also supported, for example::
     $ nodeset -e node[000-012/4]
     node000 node004 node008 node012
 
-Nevertheless, care should be taken when dealing with padding, as a zero-padded
-node name has priority over a normal one, for example::
+Since v1.9, mixed length padding is allowed, for example::
 
-    $ nodeset -f node1 node02
-    node[01-02]
+    $ nodeset -f node2 node01 node001
+    node[2,01,001]
 
-To clarify, *nodeset* will always try to coalesce node names by their
-numerical index first (without taking care of any zero-padding), and then will
-use the first zero-padding rule encountered. In the following example, the
-first zero-padding rule found is *node01*'s one::
+When mixed length zero-padding is encountered, indexes with smaller padding
+length are returned first, as you can see in the example above (``2`` comes
+before ``01``).
 
-    $ nodeset -f node01 node002
-    node[01-02]
+Since v1.9, when using node sets with multiple dimensions, each dimension (or
+axis) may also use mixed length zero-padding::
 
-That said, you can see it is not possible to mix *node01* and *node001* in the
-same node set (not supported by the :class:`.NodeSet` class), but that would
-be a tricky case anyway!
+    $ nodeset -f foo1bar1 foo1bar00 foo1bar01 foo004bar1 foo004bar00 foo004bar01
+    foo[1,004]bar[1,00-01]
 
 
 Leading and trailing digits
@@ -325,7 +324,13 @@ Examples with both bracket leading and trailing digits::
     $ nodeset --autostep=auto -f node-00[1-6]0
     node-[0010-0060/10]
 
-Still, using this syntax can be error-prone especially if used with node sets
+Example with leading digit and mixed length zero padding (supported since
+v1.9)::
+
+    $ nodeset -f node1[00-02,000-032/8]
+    node[100-102,1000,1008,1016,1024,1032]
+
+Using this syntax can be error-prone especially if used with node sets
 without 0-padding or with the */step* syntax and also requires additional
 processing by the parser. In general, we recommend writing the whole rangeset
 inside the brackets.
@@ -350,7 +355,7 @@ the union operation will be computed, for example::
 
     $ nodeset -f node[1-3] node[4-7]
     node[1-7]
-    
+
     $ nodeset -f node[1-3] node[2-7] node[5-8]
     node[1-8]
 
@@ -634,9 +639,13 @@ configured group sources and also display the default group source (unless
 Listing group names
 """""""""""""""""""
 
-If the **list** external shell command is configured (see
-:ref:`node groups configuration <groups-config>`), it is possible to list
-available groups *from the default source* with the following commands::
+It is always possible to list the groups from a group source if the source is
+:ref:`file-based <group-file-based>`.
+If the source is an :ref:`external group source <group-external-sources>`, the
+**list** upcall must be configured (see also:
+:ref:`node groups configuration <groups-config>`).
+
+To list available groups *from the default source*, use the following command::
 
     $ nodeset -l
     @mgnt
@@ -645,7 +654,7 @@ available groups *from the default source* with the following commands::
     @login
     @compute
 
-Or, to list groups *from a specific group source*, use *-l* in conjunction
+To list groups *from a specific group source*, use *-l* in conjunction
 with *-s* (or *--groupsource*)::
 
     $ nodeset -l -s slurm
@@ -666,6 +675,49 @@ Or, to list groups *from all available group sources*, use *-L* (or
 
 You can also use ``nodeset -ll`` or ``nodeset -LL`` to see each group's
 associated node sets.
+
+.. _nodeset-rawgroupnames:
+
+Listing group names in expressions
+""""""""""""""""""""""""""""""""""
+
+ClusterShell 1.9 introduces a new operator **@@** optionally followed by a
+source name (e.g. **@@source**) to access the list of *raw group names* of
+the source (without the **@** prefix). If no source is specified (as in *just*
+**@@**), the default group source is used (see :ref:`groups_config_conf`).
+The **@@** operator may be used in any node set expression to manipulate group
+names as a node set.
+
+Example with the default group source::
+
+    $ nodeset -l
+    @mgnt
+    @mds
+    @oss
+    @login
+    @compute
+    
+    $ nodeset -e @@
+    compute login mds mgnt oss
+
+Example with a group source "rack" that defines group names from rack
+locations in a data center::
+
+    $ nodeset -l -s rack
+    @rack:J1
+    @rack:J2
+    @rack:J3
+    
+    $ nodeset -f @@rack
+    J[1-3]
+
+A set of valid, indexed group sources is also accepted by the **@@** operator
+(e.g. **@@dc[1-3]**).
+
+
+.. warning:: An error is generated when using **@@** in an expression if the
+             source is not valid (e.g. invalid name, not configured or upcalls
+             not currently working).
 
 
 Using node groups in basic commands
