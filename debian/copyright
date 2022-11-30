@@ -6,8 +6,7 @@ Source: https://github.com/cea-hpc/clustershell
 
 Files: *
 Copyright: 2007-2016 CEA/DAM <www-hpc.cea.fr>
-           2014-2021 Stephane Thiell <sthiell@stanford.edu>
-           2009-2012 Henri Doreau <henri.doreau@cea.fr>
+           2016-2022 Stephane Thiell <sthiell@stanford.edu>
 License: LGPL-2.1+
 
 License: LGPL-2.1+

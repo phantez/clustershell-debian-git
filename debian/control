@@ -5,14 +5,14 @@ Maintainer: Debian Python Team <team+python@tracker.debian.org>
 Uploaders: Stéphan Gorget <phantez@gmail.com>
 Homepage: https://cea-hpc.github.io/clustershell/
 Build-Depends: debhelper-compat (= 13), python3-all, python3-setuptools, dh-python
-Standards-Version: 4.6.0.1
+Standards-Version: 4.6.1.1
 Vcs-Git: https://salsa.debian.org/python-team/packages/clustershell.git
 Vcs-Browser: https://salsa.debian.org/python-team/packages/clustershell
 
 Package: python3-clustershell
 Architecture: all
 Section: python
-Depends: ${misc:Depends}, ${python3:Depends}, python3-pkg-resources
+Depends: ${misc:Depends}, ${python3:Depends}
 Suggests: vim-addon-manager
 Recommends: python3-yaml
 Description: clustershell python3 libraries
@@ -24,7 +24,6 @@ Package: clustershell
 Architecture: all
 Depends: ${misc:Depends}, ${python3:Depends}, python3-clustershell
 Suggests: vim-addon-manager
-Recommends: python3-yaml
 Description: Distributed shell that provides an efficient Python interface
  Event-based Python library to execute commands on local or distant
  cluster nodes in parallel depending on the selected engine and

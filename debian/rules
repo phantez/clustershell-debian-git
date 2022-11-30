@@ -8,9 +8,6 @@ export PYBUILD_AFTER_INSTALL_python3 = rm -rf {destdir}/etc/clustershell
 %:
 	dh $@ --with python3 --buildsystem=pybuild
 
-get-orig-tarball:
-	uscan --verbose --force-download
-
 override_dh_auto_install:
 	dh_auto_install
 	dh_movefiles --package=$(PYBUILD_NAME) --sourcedir=$(PYBUILD_DESTDIR_python3) usr/bin
