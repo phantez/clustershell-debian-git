@@ -1,17 +1,17 @@
-clustershell (1.9-1) UNRELEASED; urgency=medium
+clustershell (1.9-1) unstable; urgency=medium
 
   * New upstream release 1.9
   * Remove unnecessary README.debian file about vim-addon
   * Update copyright years
   * Update debian policy version to 4.6.1.1
-  * Remove empty files
+  * Remove empty files from the debian dir
   * Remove get-orig-tarball target
   * Remove python3-yaml recommended from clustershell package
   * Remove python3-pkg-resources from python3-clustershell dependency
   * Define import_name for autopkgtest
   * Remove empty /etc folder in python3-clustershell
 
- -- Stéphan Gorget <phantez@gmail.com>  Wed, 30 Nov 2022 11:16:01 +0000
+ -- Stéphan Gorget <phantez@gmail.com>  Wed, 30 Nov 2022 12:34:56 +0000
 
 clustershell (1.8.4-2) unstable; urgency=medium
 
