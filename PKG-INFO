@@ -1,12 +1,12 @@
 Metadata-Version: 1.1
 Name: ClusterShell
-Version: 1.9
+Version: 1.9.1
 Summary: ClusterShell library and tools
-Home-page: http://clustershell.sourceforge.net/
+Home-page: https://clustershell.readthedocs.io/
 Author: Stephane Thiell
 Author-email: sthiell@stanford.edu
 License: LGPLv2+
-Download-URL: http://sourceforge.net/projects/clustershell/files/clustershell/1.9/
+Download-URL: https://github.com/cea-hpc/clustershell/archive/refs/tags/v1.9.1.tar.gz
 Description: ClusterShell is an event-driven open source Python framework, designed to run
         local or distant commands in parallel on server farms or on large Linux
         clusters. It will take care of common issues encountered on HPC clusters, such
@@ -91,9 +91,9 @@ Classifier: Operating System :: MacOS :: MacOS X
 Classifier: Operating System :: POSIX :: BSD
 Classifier: Operating System :: POSIX :: Linux
 Classifier: Programming Language :: Python
-Classifier: Programming Language :: Python :: 2.6
 Classifier: Programming Language :: Python :: 2.7
 Classifier: Programming Language :: Python :: 3
 Classifier: Topic :: Software Development :: Libraries :: Python Modules
 Classifier: Topic :: System :: Clustering
 Classifier: Topic :: System :: Distributed Computing
+License-File: COPYING.LGPLv2.1

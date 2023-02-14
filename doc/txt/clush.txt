@@ -7,9 +7,9 @@ execute shell commands on a cluster
 -----------------------------------
 
 :Author: Stephane Thiell <sthiell@stanford.edu>
-:Date:   2022-11-25
+:Date:   2023-02-09
 :Copyright: GNU Lesser General Public License version 2.1 or later (LGPLv2.1+)
-:Version: 1.9
+:Version: 1.9.1
 :Manual section: 1
 :Manual group: ClusterShell User Manual
 
@@ -164,7 +164,7 @@ Output behaviour:
   --color=WHENCOLOR   ``clush`` can use NO_COLOR, CLICOLOR and CLICOLOR_FORCE environment variables. NO_COLOR takes precedence over CLICOLOR_FORCE which takes precedence over CLICOLOR.  When ``--color`` option is used these environment variables are not taken into account. ``--color`` tells whether to use ANSI colors to surround node or nodeset prefix/header with escape sequences to display them in color on the terminal. *WHENCOLOR* is ``never``, ``always`` or ``auto`` (which use color if standard output/error refer to a terminal). Colors are set to [34m (blue foreground text) for stdout and [31m (red foreground text) for stderr, and cannot be modified.
   --diff              show diff between common outputs (find the best reference output by focusing on largest nodeset and also smaller command return code)
   --outdir=OUTDIR     output directory for stdout files (OPTIONAL)
-  --errdir=ERRDIR     output directory for sterr files (OPTIONAL)
+  --errdir=ERRDIR     output directory for stderr files (OPTIONAL)
 
 File copying:
   -c, --copy          copy local file or directory to remote nodes
@@ -176,7 +176,7 @@ File copying:
 
 Connection options:
   -f FANOUT, --fanout=FANOUT
-                      do not execute more than FANOUT commands at the same time, useful to limit resource usage. In tree mode, the same *fanout* value is used on the head node and on each gateway (the *fanout* value is propagated). That is, if the *fanout* is **16**, each gateway will initate up to **16** connections to their target nodes at the same time. Default *fanout* value is defined in ``clush.conf``\(5).
+                      do not execute more than FANOUT commands at the same time, useful to limit resource usage. In tree mode, the same *fanout* value is used on the head node and on each gateway (the *fanout* value is propagated). That is, if the *fanout* is **16**, each gateway will initiate up to **16** connections to their target nodes at the same time. Default *fanout* value is defined in ``clush.conf``\(5).
   -l USER, --user=USER
                       execute remote command as user
   -o OPTIONS, --options=OPTIONS
