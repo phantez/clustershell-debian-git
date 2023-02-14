@@ -1,4 +1,4 @@
-clustershell (1.9.1-1) UNRELEASED; urgency=medium
+clustershell (1.9.1-1) unstable; urgency=medium
 
   * New upstream release 1.9.1
   * Update debian policy version to 4.6.2.0
@@ -6,7 +6,7 @@ clustershell (1.9.1-1) UNRELEASED; urgency=medium
   * Relocate all configuration examples under /etc/clustershell
   * Remove d/clustershell.examples
 
- -- Stéphan Gorget <phantez@gmail.com>  Tue, 14 Feb 2023 00:33:21 +0000
+ -- Stéphan Gorget <phantez@gmail.com>  Tue, 14 Feb 2023 15:53:03 +0000
 
 clustershell (1.9-1) unstable; urgency=medium
 
