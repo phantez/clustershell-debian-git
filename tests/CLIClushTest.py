@@ -6,7 +6,7 @@
 import codecs
 import errno
 import os
-from os.path import basename
+from os.path import basename, dirname
 import pwd
 import re
 import resource
@@ -183,28 +183,64 @@ class CLIClushTest_A(unittest.TestCase):
         """test clush (file copy)"""
         content = "%f" % time.time()
         content = content.encode()
-        f = make_temp_file(content)
-        self._clush_t(["-w", HOSTNAME, "-c", f.name], None, b"")
-        f.seek(0)
-        self.assertEqual(f.read(), content)
+        sf = make_temp_file(content)
+        self._clush_t(["-w", HOSTNAME, "-c", sf.name], None, b"")
+        sf.seek(0)
+        self.assertEqual(sf.read(), content)
         # test --dest option
         f2 = tempfile.NamedTemporaryFile()
-        self._clush_t(["-w", HOSTNAME, "-c", f.name, "--dest", f2.name], None,
+        self._clush_t(["-w", HOSTNAME, "-c", sf.name, "--dest", f2.name], None,
                       b"")
         f2.seek(0)
         self.assertEqual(f2.read(), content)
+        # test multi --dest (manual)
+        tdir = make_temp_dir()
+        sf2 = make_temp_file(b'second')
+        try:
+            f2 = tempfile.NamedTemporaryFile()
+            self._clush_t(["-w", HOSTNAME, "-c", sf.name, sf2.name, "--dest",
+                           tdir.name],
+                          None, b"")
+            with open(os.path.join(tdir.name, basename(sf.name)), 'rb') as chkf:
+                self.assertEqual(chkf.read(), content)
+            with open(os.path.join(tdir.name, basename(sf2.name)), 'rb') as chkf:
+                self.assertEqual(chkf.read(), b'second')
+        finally:
+            sf2.close()
+            tdir.cleanup()
+        # test multi --dest (auto)
+        tdir = make_temp_dir()
+        sf2 = make_temp_file(b'second', dir=tdir.name)
+        try:
+            f2 = tempfile.NamedTemporaryFile()
+            self._clush_t(["-w", HOSTNAME, "-c", sf.name, sf2.name], None,
+                          b"")
+            sf.seek(0)
+            sf2.seek(0)
+            self.assertEqual(sf.read(), content)
+            self.assertEqual(sf2.read(), b'second')
+        finally:
+            sf2.close()
+            tdir.cleanup()
         # test --user option
         f2 = tempfile.NamedTemporaryFile()
         self._clush_t(["--user", pwd.getpwuid(os.getuid())[0], "-w", HOSTNAME,
-                       "--copy", f.name, "--dest", f2.name], None, b"")
+                       "--copy", sf.name, "--dest", f2.name], None, b"")
         f2.seek(0)
         self.assertEqual(f2.read(), content)
         # test --rcopy
         self._clush_t(["--user", pwd.getpwuid(os.getuid())[0], "-w", HOSTNAME,
-                       "--rcopy", f.name, "--dest", os.path.dirname(f.name)],
+                       "--rcopy", sf.name, "--dest", dirname(sf.name)],
                       None, b"")
         f2.seek(0)
-        self.assertEqual(open("%s.%s" % (f.name, HOSTNAME), 'rb').read(),
+        self.assertEqual(open("%s.%s" % (sf.name, HOSTNAME), 'rb').read(),
+                         content)
+        # test --rcopy with implicit --dest
+        self._clush_t(["--user", pwd.getpwuid(os.getuid())[0], "-w", HOSTNAME,
+                       "--rcopy", sf.name],
+                      None, b"")
+        f2.seek(0)
+        self.assertEqual(open("%s.%s" % (sf.name, HOSTNAME), 'rb').read(),
                          content)
 
     def test_009_file_copy_tty(self):
@@ -403,10 +439,10 @@ class CLIClushTest_A(unittest.TestCase):
     def test_027_warn_shell_globbing_nodes(self):
         """test clush warning on shell globbing (-w)"""
         tdir = make_temp_dir()
-        tfile = open(os.path.join(tdir, HOSTNAME), "w")
+        tfile = open(os.path.join(tdir.name, HOSTNAME), "w")
         curdir = os.getcwd()
         try:
-            os.chdir(tdir)
+            os.chdir(tdir.name)
             s = "Warning: using '-w %s' and local path '%s' exists, was it " \
                 "expanded by the shell?\n" % (HOSTNAME, HOSTNAME)
             self._clush_t(["-w", HOSTNAME, "echo", "ok"], None,
@@ -415,15 +451,15 @@ class CLIClushTest_A(unittest.TestCase):
             os.chdir(curdir)
             tfile.close()
             os.unlink(tfile.name)
-            os.rmdir(tdir)
+            tdir.cleanup()
 
     def test_028_warn_shell_globbing_exclude(self):
         """test clush warning on shell globbing (-x)"""
         tdir = make_temp_dir()
-        tfile = open(os.path.join(tdir, HOSTNAME), "wb")
+        tfile = open(os.path.join(tdir.name, HOSTNAME), "wb")
         curdir = os.getcwd()
         try:
-            os.chdir(tdir)
+            os.chdir(tdir.name)
             rxs = r"^Warning: using '-x %s' and local path " \
                   r"'%s' exists, was it expanded by the shell\?\n" \
                   % (HOSTNAME, HOSTNAME)
@@ -434,7 +470,7 @@ class CLIClushTest_A(unittest.TestCase):
             os.chdir(curdir)
             tfile.close()
             os.unlink(tfile.name)
-            os.rmdir(tdir)
+            tdir.cleanup()
 
     def test_029_hostfile(self):
         """test clush --hostfile"""
@@ -629,10 +665,10 @@ class CLIClushTest_A(unittest.TestCase):
         """test clush --outdir and --errdir"""
         odir = make_temp_dir()
         edir = make_temp_dir()
-        tofilepath = os.path.join(odir, HOSTNAME)
-        tefilepath = os.path.join(edir, HOSTNAME)
+        tofilepath = os.path.join(odir.name, HOSTNAME)
+        tefilepath = os.path.join(edir.name, HOSTNAME)
         try:
-            self._clush_t(["-w", HOSTNAME, "--outdir", odir, "echo", "ok"],
+            self._clush_t(["-w", HOSTNAME, "--outdir", odir.name, "echo", "ok"],
                           None, self.output_ok)
             self.assertTrue(os.path.isfile(tofilepath))
             with open(tofilepath, "r") as f:
@@ -640,7 +676,7 @@ class CLIClushTest_A(unittest.TestCase):
         finally:
             os.unlink(tofilepath)
         try:
-            self._clush_t(["-w", HOSTNAME, "--errdir", edir, "echo", "ok", ">&2"],
+            self._clush_t(["-w", HOSTNAME, "--errdir", edir.name, "echo", "ok", ">&2"],
                           None, None, 0, self.output_ok)
             self.assertTrue(os.path.isfile(tefilepath))
             with open(tefilepath, "r") as f:
@@ -649,7 +685,7 @@ class CLIClushTest_A(unittest.TestCase):
             os.unlink(tefilepath)
         try:
             serr = "%s: err\n" % HOSTNAME
-            self._clush_t(["-w", HOSTNAME, "--outdir", odir, "--errdir", edir,
+            self._clush_t(["-w", HOSTNAME, "--outdir", odir.name, "--errdir", edir.name,
                           "echo", "ok", ";", "echo", "err", ">&2"], None,
                           self.output_ok, 0, serr.encode())
             self.assertTrue(os.path.isfile(tofilepath))
@@ -661,8 +697,8 @@ class CLIClushTest_A(unittest.TestCase):
         finally:
             os.unlink(tofilepath)
             os.unlink(tefilepath)
-        os.rmdir(odir)
-        os.rmdir(edir)
+        odir.cleanup()
+        edir.cleanup()
 
     def test_042_command_prefix(self):
         """test clush -O command_prefix"""
