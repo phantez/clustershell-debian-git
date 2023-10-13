@@ -23,7 +23,7 @@ import os
 from setuptools import setup, find_packages
 
 
-VERSION = '1.9.1'
+VERSION = '1.9.2'
 
 CFGDIR = 'etc/clustershell'
 MANDIR = 'share/man'
@@ -46,6 +46,7 @@ setup(name='ClusterShell',
                   (os.path.join(CFGDIR, 'groups.conf.d'),
                    ['conf/groups.conf.d/genders.conf.example',
                     'conf/groups.conf.d/slurm.conf.example',
+                    'conf/groups.conf.d/xcat.conf.example',
                     'conf/groups.conf.d/README']),
                   (os.path.join(CFGDIR, 'groups.d'),
                    ['conf/groups.d/cluster.yaml.example',
