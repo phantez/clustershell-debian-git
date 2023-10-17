@@ -1,8 +1,8 @@
-clustershell (1.9.2-1) UNRELEASED; urgency=medium
+clustershell (1.9.2-1) unstable; urgency=medium
 
   * New upstream release 1.9.2
 
- -- Stéphan Gorget <phantez@gmail.com>  Fri, 13 Oct 2023 13:12:11 +0100
+ -- Stéphan Gorget <phantez@gmail.com>  Tue, 17 Oct 2023 07:59:05 +0000
 
 clustershell (1.9.1-1) unstable; urgency=medium
 
