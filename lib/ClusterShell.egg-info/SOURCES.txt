@@ -4,6 +4,8 @@ MANIFEST.in
 README.md
 setup.cfg
 setup.py
+bash_completion.d/cluset
+bash_completion.d/clush
 conf/clush.conf
 conf/groups.conf
 conf/topology.conf.example
