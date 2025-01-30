@@ -1,8 +1,12 @@
 clustershell (1.9.3-1) UNRELEASED; urgency=medium
 
+  [ Stéphan Gorget ]
   * New upstream release
   * Add bash_completion build dependency
   * Update debian policy version to 4.7.0
+
+  [ Jeroen Ploemen ]
+  * Bump Standards-Version to 4.7.0 (from 4.6.2; no further changes).
 
  -- Stéphan Gorget <phantez@gmail.com>  Thu, 30 Jan 2025 15:24:24 +0000
 
