@@ -1,2 +1,3 @@
-version=4
-https://pypi.debian.net/ClusterShell/[Cc]luster[Ss]hell-(.*).tar.gz
+Version: 5
+Source: https://pypi.debian.net/ClusterShell/
+Matching-Pattern: [Cc]luster[Ss]hell-(.*).tar.gz
