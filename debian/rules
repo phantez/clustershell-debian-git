@@ -8,8 +8,7 @@ export PYBUILD_AFTER_INSTALL_python3 = rm -rf {destdir}/etc
 %:
 	dh $@ --with bash-completion --buildsystem=pybuild
 
-override_dh_auto_install:
-	dh_auto_install
+execute_after_auto_install:
 	dh_movefiles --package=$(PYBUILD_NAME) --sourcedir=$(PYBUILD_DESTDIR_python3) usr/bin
 	dh_install --package=$(PYBUILD_NAME) conf/clush.conf etc/clustershell
 	dh_install --package=$(PYBUILD_NAME) conf/clush.conf.d etc/clustershell
@@ -25,6 +24,5 @@ override_dh_auto_install:
 	rm -rf $(PYBUILD_DESTDIR_python3)/usr/etc
 	rm -rf $(PYBUILD_DESTDIR_python3)/usr/share/man
 
-override_dh_auto_clean:
-	dh_auto_clean
+execute_after_dh_auto_clean:
 	rm -rf scripts/nodeset scripts/clush scripts/clubak scripts/cluset lib/ClusterShell.egg-info
