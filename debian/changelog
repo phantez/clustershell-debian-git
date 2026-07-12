@@ -1,3 +1,16 @@
+clustershell (1.9.3-2) unstable; urgency=medium
+
+  * Team Upload
+  * d/watch:
+    * adapt for new PyPi archive naming policy
+    * rewrite in v5 format
+  * Add debian/salsa-ci.yml
+  * Bump Standards-Version to 4.7.4, drop Priority: tag
+  * Use newer dh-sequence-python3
+  * Rewrite d/rules with newer & shorter syntax
+
+ -- Alexandre Detiste <tchet@debian.org>  Sun, 12 Jul 2026 18:10:09 +0200
+
 clustershell (1.9.3-1) unstable; urgency=medium
 
   [ Stéphan Gorget ]
