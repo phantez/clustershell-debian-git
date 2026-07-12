@@ -8,6 +8,7 @@ clustershell (1.9.3-2) unstable; urgency=medium
   * Bump Standards-Version to 4.7.4, drop Priority: tag
   * Use newer dh-sequence-python3
   * Rewrite d/rules with newer & shorter syntax
+  * Replace FSF postal address with a reference to https://www.gnu.org/...
 
  -- Alexandre Detiste <tchet@debian.org>  Sun, 12 Jul 2026 18:10:09 +0200
 
