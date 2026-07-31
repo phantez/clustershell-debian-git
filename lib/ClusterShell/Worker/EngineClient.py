@@ -264,18 +264,23 @@ class EngineClient(EngineBaseTimer):
         Derived classes should implement.
         """
         for sname in list(self.streams):
-            self._close_stream(sname)
+            # for engine-induced timeout with abort, do not actually abort
+            # the stream so we can flush buffers (original behavior)
+            self._close_stream(sname, abort and not timeout)
 
         self.invalidate()  # set self._engine to None
 
-    def _close_stream(self, sname):
+    def _close_stream(self, sname, abort=False):
         """
         Close specific stream by name (internal, called by engine). This method
-        is the regular way to close a stream flushing read buffers accordingly.
+        is the regular way to close a stream flushing read buffers accordingly,
+        unless we are closing the stream with the abort flag set to True.
         """
-        self._flush_read(sname)
         # flush_read() is useful but may generate user events (ev_read) that
         # could lead to worker abort and then ev_close. Be careful there.
+        # If we are doing a close with abort, skip the flush (this is newer).
+        if not abort:
+            self._flush_read(sname)
         if sname in self.streams:
             del self.streams[sname]
 
@@ -334,6 +339,9 @@ class EngineClient(EngineBaseTimer):
                 if exc.errno == errno.EPIPE:
                     # broken pipe: log warning message and do NOT retry
                     LOGGER.warning('%r: %s', self, exc)
+                    # remove stream now; select engine has no POLLERR
+                    if self._engine:
+                        self._engine.remove_stream(self, wfile)
                     return
                 raise
             if wcnt > 0:
@@ -405,6 +413,11 @@ class EngineClient(EngineBaseTimer):
 
     def _write(self, sname, buf):
         """Add some data to be written to the client."""
+        if sname not in self.streams:
+            LOGGER.debug("dropping write to unknown or closed stream %s on "
+                         "client %s", sname, self.key)
+            return
+
         wfile = self.streams[sname]
         if self._engine and wfile.fd:
             wfile.wbuf += buf

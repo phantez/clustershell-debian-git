@@ -2,7 +2,6 @@ COPYING.LGPLv2.1
 ChangeLog
 MANIFEST.in
 README.md
-setup.cfg
 setup.py
 bash_completion.d/cluset
 bash_completion.d/clush
@@ -13,14 +12,13 @@ conf/clush.conf.d/README
 conf/clush.conf.d/sshpass.conf.example
 conf/clush.conf.d/sudo.conf.example
 conf/groups.conf.d/README
-conf/groups.conf.d/ace.conf.example
+conf/groups.conf.d/ansible.conf.example
 conf/groups.conf.d/genders.conf.example
 conf/groups.conf.d/slurm.conf.example
 conf/groups.conf.d/xcat.conf.example
 conf/groups.d/README
 conf/groups.d/cluster.yaml.example
 conf/groups.d/local.cfg
-doc/epydoc/clustershell_epydoc.conf
 doc/examples/check_nodes.py
 doc/examples/defaults.conf-rsh
 doc/extras/vim/ftdetect/clustershell.vim
@@ -32,8 +30,9 @@ doc/man/man1/clush.1
 doc/man/man1/nodeset.1
 doc/man/man5/clush.conf.5
 doc/man/man5/groups.conf.5
+doc/sphinx/CHARTER.rst
 doc/sphinx/Makefile
-doc/sphinx/clustershell-nautilus-logo200.png
+doc/sphinx/acknowledgments.rst
 doc/sphinx/conf.py
 doc/sphinx/config.rst
 doc/sphinx/further.rst
@@ -44,6 +43,7 @@ doc/sphinx/release.rst
 doc/sphinx/_static/clustershell-nautilus-logo200.png
 doc/sphinx/_static/theme_overrides.css
 doc/sphinx/api/Defaults.rst
+doc/sphinx/api/EnginePort.rst
 doc/sphinx/api/EngineTimer.rst
 doc/sphinx/api/Event.rst
 doc/sphinx/api/MsgTree.rst
@@ -124,11 +124,13 @@ lib/ClusterShell/Worker/__init__.py
 lib/ClusterShell/Worker/fastsubprocess.py
 tests/CLIClubakTest.py
 tests/CLIClushTest.py
+tests/CLICompletionTest.py
 tests/CLIConfigTest.py
 tests/CLIDisplayTest.py
 tests/CLINodesetTest.py
 tests/CLIOptionParserTest.py
 tests/DefaultsTest.py
+tests/EngineErrorTest.py
 tests/MisusageTest.py
 tests/MsgTreeTest.py
 tests/NodeSetGroupTest.py
@@ -156,3 +158,5 @@ tests/TreeTaskTest.py
 tests/TreeTopologyTest.py
 tests/TreeWorkerTest.py
 tests/WorkerExecTest.py
+tests/__init__.py
+tests/bin/hostname
