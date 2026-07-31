@@ -37,8 +37,8 @@ Simple example of use:
 >>> 
 >>> # get results
 ... for output, nodelist in task.iter_buffers():
-...     print '%s: %s' % (NodeSet.fromlist(nodelist), output)
-... 
+...     print('%s: %s' % (NodeSet.fromlist(nodelist), output.message().decode()))
+...
 
 """
 
@@ -476,9 +476,11 @@ class Task(object):
           - "stderr_msgtree": Same for stderr (default: True).
           - "engine": Used to specify an underlying Engine explicitly
             (default: "auto").
-          - "port_qlimit": Size of port messages queue (default: 32).
-          - "worker": Worker-based class used when spawning workers through
-            shell()/run().
+          - "port_qlimit": Size of port messages queue (default: 100).
+          - "local_workername": Worker name used when spawning workers
+            for local commands (default: "exec").
+          - "distant_workername": Worker name used when spawning workers
+            for distant commands (default: "ssh").
 
         Threading considerations:
 
@@ -529,7 +531,7 @@ class Task(object):
           - "fanout": Max number of registered clients in Engine at a
             time (default: 64).
           - "grooming_delay": Message maximum end-to-end delay requirement
-            used for traffic grooming, in seconds as float (default: 0.5).
+            used for traffic grooming, in seconds as float (default: 0.25).
           - "connect_timeout": Time in seconds to wait for connecting to
             remote host before aborting (default: 10).
           - "command_timeout": Time in seconds to wait for a command to
@@ -643,6 +645,10 @@ class Task(object):
     def copy(self, source, dest, nodes, **kwargs):
         """
         Copy local file to distant nodes.
+
+        Note: in tree mode, copy and rcopy always separate stderr so that
+        the internal tar/scp error messages are not merged into stdout; an
+        explicit stderr=False is then ignored.
         """
         assert nodes != None, "local copy not supported"
 
@@ -958,6 +964,11 @@ class Task(object):
         Abort completion subroutine.
         """
         assert self._quit == True
+
+        # already fully terminated by a prior abort pass (#110)
+        if self._engine is None:
+            return
+
         self._terminated = True
 
         if kill:
@@ -1246,8 +1257,8 @@ class Task(object):
         Usage example:
 
         >>> for buffer, nodelist in task.iter_buffers():
-        ...     print NodeSet.fromlist(nodelist)
-        ...     print buffer
+        ...     print(NodeSet.fromlist(nodelist))
+        ...     print(buffer.message().decode())
         """
         return self._iter_msgtree('stdout', match_keys)
 
@@ -1365,8 +1376,10 @@ class Task(object):
     def _pchannel_release(self, gateway, metaworker):
         """Release propagation channel associated to gateway.
 
-        Lookup by gateway, decref associated metaworker set and release
-        channel worker if needed.
+        Lookup by gateway, decref associated metaworker set and abort channel
+        worker if not used anymore.
+
+        Called by TreeWorker._check_fini()
         """
         logger = logging.getLogger(__name__)
         logger.debug("pchannel_release %s %s", gateway, metaworker)
@@ -1381,11 +1394,29 @@ class Task(object):
             chanworker, metaworkers = self.gateways[gwstr]
             metaworkers.remove(metaworker)
             if len(metaworkers) == 0:
-                logger.debug("pchannel_release: destroying channel %s",
+                logger.debug("pchannel_release: closing channel %s",
                             chanworker.eh)
-                chanworker.abort()
-                # delete gateway reference
-                del self.gateways[gwstr]
+                # Call PropagationChannel._close() that will close the channel
+                # properly, update the opened/setup flags and abort the worker.
+                # We might be in an event handler and we want to make sure we
+                # ignore any pending messages from this gateway from now on.
+                chanworker.eh._close(abort=True)
+
+    def _pchannel_close(self, gateway, chanworker):
+        """A propagation channel is closing.
+
+        Perform necessary cleanup actions when a gateway channel is closing.
+
+        Called by PropagationChannel.ev_close().
+        """
+        logger = logging.getLogger(__name__)
+        logger.debug("pchannel_closing: %s", gateway)
+        chwrk, metaworkers = self.gateways[gateway]
+        assert chwrk is chanworker, (chwrk, chanworker)
+        metaworkers_copy = list(metaworkers)
+        for mw in metaworkers_copy:
+            mw._gateway_abort(gateway)
+        del self.gateways[gateway]
 
 
 def task_self(defaults=None):

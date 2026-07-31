@@ -5,8 +5,10 @@ Unit test for StreamWorker
 import os
 import unittest
 
+from ClusterShell.Defaults import DEFAULTS
+from ClusterShell.Engine.Select import EngineSelect
 from ClusterShell.Worker.Worker import StreamWorker, WorkerError
-from ClusterShell.Task import task_self
+from ClusterShell.Task import task_self, task_terminate
 from ClusterShell.Event import EventHandler
 
 
@@ -331,3 +333,98 @@ class StreamTest(unittest.TestCase):
 
         self.run_worker(worker)
         self.assertEqual(hdlr.check_close, 1)
+
+    def test_010_worker_abort_with_read_buffers(self):
+        """test StreamWorker abort() with read buffers"""
+        class TestH(EventHandler):
+            def __init__(self, testcase):
+                self.testcase = testcase
+                self.read_count = 0
+                self.timer_called = False
+                self.worker = None
+                self.wfd1 = None
+
+            def ev_timer(self, timer):
+                self.timer_called = True
+                self.worker.abort()
+
+            def ev_read(self, worker, node, sname, msg):
+                self.read_count += 1
+                os.write(self.wfd1, b"Some unterminated  data line")
+
+        # We want to test that a StreamWorker.abort() does not generate any
+        # additional ev_read events. This only works if timeout is not set.
+        # For a test with timeout, see test_004_timeout_on_open_stream().
+        hdlr = TestH(self)
+        worker = StreamWorker(handler=hdlr) # no timeout
+        hdlr.worker = worker
+        # Create pipe stream
+        rfd1, wfd1 = os.pipe()
+        hdlr.wfd1 = wfd1
+        worker.set_reader("pipe1", rfd1, closefd=False)
+        os.write(wfd1, b"Some terminated data line\n")
+        # TEST: Do not close wfd1 to simulate open stream
+        # We use an "external" timer to delay the abort() a bit
+        timer1 = task_self().timer(0.5, handler=hdlr)
+        self.run_worker(worker)
+        self.assertTrue(hdlr.timer_called)
+        self.assertEqual(hdlr.read_count, 1) # single line only
+        os.close(rfd1)
+        os.close(wfd1)
+
+    def test_011_broken_pipe_on_write_twice(self):
+        """test StreamWorker with broken pipe and subsequent writes"""
+
+        # This test is similar to test_008 but performs more write() calls
+        # after the broken pipe error to check they are safely dropped.
+
+        class TestH(EventHandler):
+            def __init__(self, testcase, rfd):
+                self.testcase = testcase
+                self.rfd = rfd
+                self.check_hup = 0
+                self.check_written = 0
+
+            def ev_hup(self, worker, node, rc):
+                self.check_hup += 1
+
+            def ev_written(self, worker, node, sname, size):
+                self.check_written += 1
+                self.testcase.assertEqual(os.read(self.rfd, 1024), b"initial")
+                # close reader, that will stop the StreamWorker
+                os.close(self.rfd)
+                worker.write(b"final")
+                # stream may be closed at this point; check that subsequent
+                # writes are dropped without error
+                worker.write(b"more", "test")
+                worker.set_write_eof()
+
+        rfd, wfd = os.pipe()
+
+        hdlr = TestH(self, rfd)
+        worker = StreamWorker(handler=hdlr)
+
+        worker.set_writer("test", wfd) # closefd=True
+        worker.write(b"initial", "test")
+
+        self.run_worker(worker)
+        self.assertEqual(hdlr.check_hup, 1)
+        self.assertEqual(hdlr.check_written, 1)
+
+
+class StreamEngineSelectTest(StreamTest):
+    """run all StreamTest tests under the select engine"""
+
+    def setUp(self):
+        # switch Engine
+        task_terminate()
+        self.engine_id_save = DEFAULTS.engine
+        DEFAULTS.engine = EngineSelect.identifier
+        # select should be supported anywhere...
+        self.assertEqual(task_self().info('engine'),
+                         EngineSelect.identifier)
+
+    def tearDown(self):
+        # restore Engine
+        DEFAULTS.engine = self.engine_id_save
+        task_terminate()

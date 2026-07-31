@@ -3,4 +3,3 @@ clubak = ClusterShell.CLI.Clubak:main
 cluset = ClusterShell.CLI.Nodeset:main
 clush = ClusterShell.CLI.Clush:main
 nodeset = ClusterShell.CLI.Nodeset:main
-
