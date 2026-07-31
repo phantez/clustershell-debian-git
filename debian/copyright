@@ -2,11 +2,11 @@ Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: clustershell
 Upstream-Contact: Stephane Thiell <sthiell@stanford.edu>
                   Aurelien Degremont <aurelien.degremont@cea.fr>
-Source: https://github.com/cea-hpc/clustershell
+Source: https://github.com/clustershell/clustershell
 
 Files: *
 Copyright: 2007-2016 CEA/DAM <www-hpc.cea.fr>
-           2016-2022 Stephane Thiell <sthiell@stanford.edu>
+           2016-2026 Stephane Thiell <stephane@thiell.com>
 License: LGPL-2.1+
 
 License: LGPL-2.1+

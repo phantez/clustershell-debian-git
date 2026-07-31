@@ -1,3 +1,20 @@
+clustershell (1.10.1-1) UNRELEASED; urgency=medium
+
+  * New upstream release (1.10, 1.10.1)
+    - New Ansible inventory group source example
+    - New 'mapall' group source upcall for fast group resolution;
+      used by the Slurm bindings
+    - clush/clubak --axis, cluset/nodeset --index
+    - Tree mode fixes, incl. gateway pickle protocol pinning for
+      Python 3.14 interoperability
+    - Drop deprecated Cray ACE group source example
+  * d/clustershell.maintscript: remove obsolete conffile ace.conf.example
+  * d/control: update Homepage after upstream's GitHub org move
+  * d/upstream/metadata: update URLs for the GitHub org move
+  * d/copyright: update source URL and copyright years
+
+ -- Stéphan Gorget <phantez@gmail.com>  Fri, 31 Jul 2026 13:30:33 +0000
+
 clustershell (1.9.3-2) unstable; urgency=medium
 
   * Team Upload

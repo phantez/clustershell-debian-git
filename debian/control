@@ -2,7 +2,7 @@ Source: clustershell
 Section: net
 Maintainer: Debian Python Team <team+python@tracker.debian.org>
 Uploaders: Stéphan Gorget <phantez@gmail.com>
-Homepage: https://cea-hpc.github.io/clustershell/
+Homepage: https://clustershell.github.io/clustershell/
 Build-Depends:
  debhelper-compat (= 13),
  dh-sequence-python3,
