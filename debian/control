@@ -9,9 +9,13 @@ Build-Depends:
  bash-completion,
  python3-all,
  python3-setuptools,
+ bc <!nocheck>,
+ pdsh <!nocheck>,
+ python3-yaml <!nocheck>,
 Standards-Version: 4.7.4
 Vcs-Git: https://salsa.debian.org/python-team/packages/clustershell.git
 Vcs-Browser: https://salsa.debian.org/python-team/packages/clustershell
+Testsuite: autopkgtest-pkg-pybuild
 
 Package: python3-clustershell
 Architecture: all

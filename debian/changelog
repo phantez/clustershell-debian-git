@@ -1,5 +1,6 @@
 clustershell (1.10.1-1) UNRELEASED; urgency=medium
 
+  [ Stéphan Gorget ]
   * New upstream release (1.10, 1.10.1)
     - New Ansible inventory group source example
     - New 'mapall' group source upcall for fast group resolution;
@@ -12,6 +13,12 @@ clustershell (1.10.1-1) UNRELEASED; urgency=medium
   * d/control: update Homepage after upstream's GitHub org move
   * d/upstream/metadata: update URLs for the GitHub org move
   * d/copyright: update source URL and copyright years
+
+  [ Jeroen Ploemen ]
+  * Rules: run most of the upstream testsuite on build.
+  * Control: add build-deps on bc, pdsh, python3-yaml to support running
+    the tests on build.
+  * CI: enable build profile testing for nocheck.
 
  -- Stéphan Gorget <phantez@gmail.com>  Fri, 31 Jul 2026 13:30:33 +0000
 
