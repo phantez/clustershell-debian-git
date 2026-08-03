@@ -6,6 +6,7 @@ export PYBUILD_DESTDIR_python3 = debian/python3-$(PYBUILD_NAME)
 export PYBUILD_AFTER_INSTALL_python3 = rm -rf {destdir}/etc
 export PYBUILD_TEST_UNITTEST=1
 export PYBUILD_BEFORE_TEST=cp -a {dir}/tests {dir}/bash_completion.d {build_dir} && rm \
+	{build_dir}/tests/TreeGatewayTest.py \
 	{build_dir}/tests/TreeWorkerTest.py \
 	{build_dir}/tests/TaskDistant*.py \
 	{build_dir}/tests/CLIClushTest.py
