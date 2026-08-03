@@ -27,9 +27,7 @@ License: LGPL-2.1+
  version 2.1 can be found in the file `/usr/share/common-licenses/LGPL-2.1`
 
 Files: doc/sphinx/*
-Copyright: 2026-2026 Stephane Thiell <stephane@thiell.com>
-License: CC-BY-4.0
-
+Copyright: 2026 Stephane Thiell <stephane@thiell.com>
 License: CC-BY-4.0
  By exercising the Licensed Rights (defined below), You accept and agree
  to be bound by the terms and conditions of this Creative Commons

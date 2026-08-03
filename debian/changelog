@@ -1,7 +1,7 @@
 clustershell (1.10.1-1) UNRELEASED; urgency=medium
 
   [ Stéphan Gorget ]
-  * New upstream release (1.10, 1.10.1)
+  * New upstream release 1.10.1
   * d/clustershell.maintscript: remove obsolete conffile ace.conf.example
   * d/control: update Homepage after upstream's GitHub org move
   * d/upstream/metadata: update URLs for the GitHub org move
